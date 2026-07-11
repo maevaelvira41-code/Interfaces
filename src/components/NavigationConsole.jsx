@@ -1,275 +1,529 @@
-import React, { useState } from 'react';
+// src/components/NavigationConsole.jsx
+import React, { useState, useRef, useEffect } from 'react';
+import { ShoppingCart, User, LogOut, ChevronDown, ShieldCheck, Home, Package, LayoutGrid, Bell, Users, ShoppingBag, Menu, X } from 'lucide-react';
 
-export default function NavigationConsole({ currentScreen, setScreen }) {
-  const [isOpen, setIsOpen] = useState(true);
+export default function NavigationConsole({
+  currentScreen,
+  onNavigate,
+  currentUser,
+  onLogout,
+  cartCount = 0,
+  lang = 'fr',
+  onToggleLang,
+  notifications = [],
+  isClientMode = false,
+  onToggleClientMode,
+}) {
+  const [showMenu, setShowMenu] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
-  const clientScreens = [
-    { id: 'recovery', name: '1. Récupération Mot de passe', desc: 'Split-screen épuré, messages de validation et écran de succès' },
-    { id: 'home', name: '2. Page d’accueil AgroMarket', desc: 'Catalogue de vente, recherche dynamique, filtres de catégories et panier réactif' },
-    { id: 'orders', name: '3. Commandes (Client)', desc: 'Historique des commandes client, badges d’état, suivi timeline et export CSV' },
-    { id: 'checkout-wizard', name: '9. Tunnel de Paiement Wizard', desc: 'Étape par étape : adresse, livraison, paiement interactif, validation et résumé dynamique' },
-    { id: 'login-page', name: '13. Page de Connexion', desc: 'Split-screen premium, validation, affichage mot de passe, se souvenir de moi et réseaux sociaux' },
-    { id: 'cart', name: '18. Mon Panier', desc: 'Gestion des articles du panier, résumé, code promo et checkout (Design ultra-moderne)' },
-    { id: 'faq', name: '19. FAQ & Support', desc: 'Foire aux questions avec accordéon, filtrage par catégories et barre de recherche' },
-    { id: 'product-detail', name: '20. Détail Produit (Banane)', desc: 'Page produit premium avec galerie, ferme, actions d\'achat et logistique' },
-    { id: 'edit-profile', name: '21. Éditer Profil', desc: 'Formulaire moderne avec upload de photo et informations personnelles' }
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setShowMenu(false);
+        setMobileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const hideOnScreens = [
+    'admin-dashboard', 'order-management-admin', 'order-detail-admin', 'moderation-panel', 'vendor-verification',
   ];
+  if (hideOnScreens.includes(currentScreen)) return null;
 
-  const sellerScreens = [
-    { id: 'my-products', name: '4. Mes Produits (Vendeur)', desc: 'Tableau de bord de gestion avec actions (Dupliquer / Supprimer) et filtres' },
-    { id: 'plans', name: '5. Plans d’abonnement', desc: 'Tarification à 3 plans avec sélection interactive (Basic / Pro / Premium)' },
-    { id: 'add-product', name: '6. Ajouter un produit', desc: 'Formulaire multi-onglets avec prévisualisation en direct (Live Preview)' },
-    { id: 'order-detail-admin', name: '7. Détail Commande (Admin)', desc: 'Supervision de commande, suivi logistique 4 étapes, validation interactive' },
-    { id: 'order-management-admin', name: '8. Gestion Commandes (Admin)', desc: 'Tableau de bord logistique, filtrage par onglet d\'état, recherche et actions de suivi' },
-    { id: 'seller-dashboard', name: '10. Tableau de bord Vendeur', desc: 'KPIs, graphique de revenus interactif, top produits, commandes récentes et actions rapides' },
-    { id: 'user-profile', name: '11. Profil & Paramètres', desc: 'Edition profil, sécurité (2FA), préférences de notification, boutique et coordonnées bancaires' },
-    { id: 'notifications', name: '12. Centre de Notifications', desc: 'Alertes temps réel, filtres par catégorie, marquage lu/non-lu, badges urgents et actions' },
-    { id: 'admin-dashboard', name: '14. Tableau de bord Admin', desc: 'Sidebar repliable, KPIs avec barres de progression, graphe interactif et listes récentes' },
-    { id: 'sales-history', name: '15. Historique des Ventes', desc: 'Graphe double barres (ventes/commandes), donut SVG par catégorie et tableau filtrable avec totaux' },
-    { id: 'stock-alerts', name: '16. Alertes de Stocks', desc: 'Bannière d\'alerte rouge, barres de progression de remplissage, priorités et commandes d\'urgence' },
-    { id: 'moderation-panel', name: '17. Modération & Signalements', desc: 'Stats bar, onglets de filtrage par état, cartes de signalement extensibles et actions de modération' }
-  ];
+  const goHome = () => onNavigate('home');
+
+  const handleLogoutClick = () => {
+    setShowMenu(false);
+    setMobileMenuOpen(false);
+    onLogout();
+  };
+
+  const unreadNotifications = currentUser
+    ? notifications.filter(n => n.utilisateurId === currentUser.id && !n.lu).length
+    : 0;
 
   return (
-    <div style={styles.container}>
-      {/* Toggle Button */}
-      <button 
-        onClick={() => setIsOpen(!isOpen)} 
-        style={styles.toggleBtn}
-        title={isOpen ? "Masquer la console" : "Afficher la console de navigation"}
-      >
-        {isOpen ? (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 15l-6-6-6 6"/></svg>
-        ) : (
-          <div style={styles.pulseContainer}>
-            <span style={styles.pulseDot}></span>
-            <span style={styles.toggleText}>Console Jury : Cliquer pour basculer d'écran (21 interfaces disponibles)</span>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 9l6 6 6-6"/></svg>
-          </div>
-        )}
-      </button>
+    <header style={styles.wrapper}>
+      <div style={styles.inner}>
+        {/* Logo */}
+        <button style={styles.brand} onClick={goHome}>
+          <div style={styles.brandLogo}>🌿</div>
+          <span style={styles.brandName}>Agriconnect</span>
+        </button>
 
-      {/* Expanded Console */}
-      {isOpen && (
-        <div style={styles.consoleBody} className="fade-in">
-          <div style={styles.header}>
-            <div style={styles.headerTitle}>
-              <span style={styles.badge}>CONSOLE DÉMO JURY</span>
-              <h4 style={styles.title}>Visualisation des 21 Interfaces AgroMarket</h4>
-            </div>
-            <p style={styles.subtitle}>
-              Conçues par un ingénieur d'interface senior. Utilisez les sections ci-dessous pour tester l'ensemble du prototype client et vendeur.
-            </p>
-          </div>
+        {/* Menu mobile toggle */}
+        <button style={styles.mobileToggle} onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
 
-          <div style={styles.sectionsContainer}>
-            {/* Client Section */}
-            <div style={styles.sectionCol}>
-              <h5 style={styles.sectionTitle}>🛒 Espace Client</h5>
-              <div style={styles.btnGrid}>
-                {clientScreens.map((screen) => {
-                  const isActive = currentScreen === screen.id;
-                  return (
-                    <button
-                      key={screen.id}
-                      onClick={() => setScreen(screen.id)}
-                      style={{
-                        ...styles.screenBtn,
-                        ...(isActive ? styles.activeScreenBtn : {})
-                      }}
-                    >
-                      <span style={{
-                        ...styles.btnText,
-                        ...(isActive ? styles.activeBtnText : {})
-                      }}>
-                        {screen.name}
-                      </span>
-                      <span style={{
-                        ...styles.btnDesc,
-                        ...(isActive ? styles.activeBtnDesc : {})
-                      }}>
-                        {screen.desc}
-                      </span>
+        {/* Liens centraux - Desktop */}
+        <nav style={{ ...styles.navLinks, ...(mobileMenuOpen ? styles.navLinksMobile : {}) }}>
+          <button
+            style={{ ...styles.navLink, ...(currentScreen === 'home' ? styles.navLinkActive : {}) }}
+            onClick={() => { onNavigate('home'); setMobileMenuOpen(false); }}
+          >
+            <Home size={15} /> Accueil
+          </button>
+          <button
+            style={{ ...styles.navLink, ...(currentScreen === 'catalogue' ? styles.navLinkActive : {}) }}
+            onClick={() => { onNavigate('catalogue'); setMobileMenuOpen(false); }}
+          >
+            <LayoutGrid size={15} /> Catalogue
+          </button>
+          {currentUser?.role === 'vendeur' && !isClientMode && (
+            <button
+              style={{ ...styles.navLink, ...(currentScreen === 'my-products' ? styles.navLinkActive : {}) }}
+              onClick={() => { onNavigate('my-products'); setMobileMenuOpen(false); }}
+            >
+              <Package size={15} /> Mes produits
+            </button>
+          )}
+
+          {/* Zone droite intégrée dans le menu mobile */}
+          {mobileMenuOpen && (
+            <div style={styles.mobileRightZone}>
+              {onToggleLang && (
+                <button style={styles.langBtn} onClick={onToggleLang}>
+                  🌐 {lang === 'fr' ? 'EN' : 'FR'}
+                </button>
+              )}
+              {!currentUser ? (
+                <div style={styles.authButtons}>
+                  <button style={styles.loginBtn} onClick={() => { onNavigate('login-page'); setMobileMenuOpen(false); }}>Connexion</button>
+                  <button style={styles.registerBtn} onClick={() => { onNavigate('register'); setMobileMenuOpen(false); }}>S'inscrire</button>
+                </div>
+              ) : (
+                <>
+                  {(currentUser.role === 'client' || isClientMode) && (
+                    <button style={styles.cartBtn} onClick={() => { onNavigate('cart'); setMobileMenuOpen(false); }}>
+                      <ShoppingCart size={19} />
+                      {cartCount > 0 && <span style={styles.cartBadge}>{cartCount}</span>}
                     </button>
-                  );
-                })}
-              </div>
+                  )}
+                  <button style={styles.notifBtn} onClick={() => { onNavigate('notifications'); setMobileMenuOpen(false); }}>
+                    <Bell size={20} />
+                    {unreadNotifications > 0 && <span style={styles.notifBadge}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>}
+                  </button>
+                </>
+              )}
             </div>
+          )}
+        </nav>
 
-            {/* Seller Section */}
-            <div style={styles.sectionCol}>
-              <h5 style={styles.sectionTitle}>👨‍🌾 Espace Vendeur / Producteur</h5>
-              <div style={styles.btnGrid}>
-                {sellerScreens.map((screen) => {
-                  const isActive = currentScreen === screen.id;
-                  return (
-                    <button
-                      key={screen.id}
-                      onClick={() => setScreen(screen.id)}
-                      style={{
-                        ...styles.screenBtn,
-                        ...(isActive ? styles.activeScreenBtn : {})
-                      }}
-                    >
-                      <span style={{
-                        ...styles.btnText,
-                        ...(isActive ? styles.activeBtnText : {})
-                      }}>
-                        {screen.name}
-                      </span>
-                      <span style={{
-                        ...styles.btnDesc,
-                        ...(isActive ? styles.activeBtnDesc : {})
-                      }}>
-                        {screen.desc}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+        {/* Zone droite - Desktop */}
+        <div style={styles.rightZone}>
+          {onToggleLang && (
+            <button style={styles.langBtn} onClick={onToggleLang}>
+              🌐 {lang === 'fr' ? 'EN' : 'FR'}
+            </button>
+          )}
+          {!currentUser ? (
+            <div style={styles.authButtons}>
+              <button style={styles.loginBtn} onClick={() => onNavigate('login-page')}>Connexion</button>
+              <button style={styles.registerBtn} onClick={() => onNavigate('register')}>S'inscrire</button>
             </div>
-          </div>
+          ) : (
+            <>
+              {(currentUser.role === 'client' || isClientMode) && (
+                <button style={styles.cartBtn} onClick={() => onNavigate('cart')}>
+                  <ShoppingCart size={19} />
+                  {cartCount > 0 && <span style={styles.cartBadge}>{cartCount}</span>}
+                </button>
+              )}
+              <button style={styles.notifBtn} onClick={() => onNavigate('notifications')}>
+                <Bell size={20} />
+                {unreadNotifications > 0 && (
+                  <span style={styles.notifBadge}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>
+                )}
+              </button>
+
+              <div style={styles.userMenuWrap} ref={menuRef}>
+                <button style={styles.userPill} onClick={() => setShowMenu(!showMenu)}>
+                  <span style={styles.avatar}>
+                    {currentUser.photo ? (
+                      <img src={currentUser.photo} alt="Photo" style={styles.avatarImage} />
+                    ) : (
+                      currentUser.prenom?.[0]?.toUpperCase() || 'U'
+                    )}
+                  </span>
+                  <span style={styles.userInfo}>
+                    <span style={styles.userName}>{currentUser.prenom || currentUser.email}</span>
+                    <span style={styles.roleBadge}>
+                      {isClientMode ? '🛒 Client (mode)' :
+                        currentUser.role === 'vendeur' ? '🌾 Vendeur' :
+                        currentUser.role === 'admin' ? '🛡️ Admin' : '🛒 Client'}
+                    </span>
+                  </span>
+                  <ChevronDown size={14} color="#6c757d" />
+                </button>
+
+                {showMenu && (
+                  <div style={styles.dropdown}>
+                    <button style={styles.dropdownItem} onClick={() => { setShowMenu(false); onNavigate('user-profile'); }}>
+                      <User size={15} /> Mon profil
+                    </button>
+                    <button style={styles.dropdownItem} onClick={() => { setShowMenu(false); onNavigate('notifications'); }}>
+                      <Bell size={15} /> Notifications
+                      {unreadNotifications > 0 && <span style={styles.dropdownBadge}>{unreadNotifications}</span>}
+                    </button>
+                    {currentUser.role === 'client' && (
+                      <>
+                        <button style={styles.dropdownItem} onClick={() => { setShowMenu(false); onNavigate('orders'); }}>
+                          <Package size={15} /> Mes commandes
+                        </button>
+                        <button style={styles.dropdownItem} onClick={() => { setShowMenu(false); onNavigate('purchases'); }}>
+                          <ShoppingBag size={15} /> Mes achats
+                        </button>
+                      </>
+                    )}
+                    {currentUser.role === 'vendeur' && !isClientMode && (
+                      <>
+                        <button style={styles.dropdownItem} onClick={() => { setShowMenu(false); onNavigate('seller-dashboard'); }}>
+                          <Package size={15} /> Tableau de bord
+                        </button>
+                        <button style={styles.dropdownItem} onClick={() => { setShowMenu(false); onNavigate('vendeur-orders'); }}>
+                          <ShoppingBag size={15} /> Commandes reçues
+                        </button>
+                      </>
+                    )}
+                    {currentUser.role === 'vendeur' && (
+                      <button style={styles.dropdownItem} onClick={() => { setShowMenu(false); onToggleClientMode(); }}>
+                        <Users size={15} />
+                        {isClientMode ? 'Revenir en mode vendeur' : 'Se connecter en tant que client'}
+                      </button>
+                    )}
+                    {currentUser.role === 'admin' && (
+                      <button style={styles.dropdownItem} onClick={() => { setShowMenu(false); onNavigate('admin-dashboard'); }}>
+                        <Package size={15} /> Tableau de bord admin
+                      </button>
+                    )}
+                    <div style={styles.dropdownDivider} />
+                    <button style={styles.dropdownItemDanger} onClick={handleLogoutClick}>
+                      <LogOut size={15} /> Déconnexion
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
-      )}
-    </div>
+      </div>
+    </header>
   );
 }
 
 const styles = {
-  container: {
+  wrapper: {
+    backgroundColor: '#ffffff',
+    borderBottom: '1px solid #e9ecef',
     position: 'sticky',
     top: 0,
-    zIndex: 9999,
-    width: '100%',
-    backgroundColor: '#1b4d3e',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+    zIndex: 200,
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
   },
-  toggleBtn: {
+  inner: {
+    maxWidth: '1280px',
+    margin: '0 auto',
+    padding: '12px 16px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '16px',
+  },
+  brand: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: 0,
+    flexShrink: 0,
+  },
+  brandLogo: { fontSize: '24px' },
+  brandName: { fontSize: '18px', fontWeight: '900', color: '#1b4d3e', letterSpacing: '-0.02em' },
+
+  mobileToggle: {
+    display: 'none',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: '#212529',
+    padding: '4px',
+    '@media (max-width: 768px)': { display: 'flex' },
+  },
+
+  navLinks: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    flex: 1,
+    '@media (max-width: 768px)': {
+      display: 'none',
+      flexDirection: 'column',
+      position: 'absolute',
+      top: '100%',
+      left: 0,
+      right: 0,
+      backgroundColor: '#ffffff',
+      padding: '16px',
+      borderBottom: '1px solid #e9ecef',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+      gap: '8px',
+      zIndex: 300,
+    },
+  },
+  navLinksMobile: {
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    padding: '16px',
+    borderBottom: '1px solid #e9ecef',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.1)',
+    gap: '8px',
+    zIndex: 300,
+  },
+  navLink: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '8px 14px',
+    borderRadius: '10px',
+    background: 'none',
+    border: 'none',
+    color: '#6c757d',
+    fontSize: '13.5px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    '@media (max-width: 768px)': { width: '100%', justifyContent: 'center' },
+  },
+  navLinkActive: {
+    backgroundColor: '#e9f5ee',
+    color: '#1b4d3e',
+  },
+
+  rightZone: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    flexShrink: 0,
+    '@media (max-width: 768px)': { display: 'none' },
+  },
+  mobileRightZone: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    paddingTop: '8px',
+    borderTop: '1px solid #e9ecef',
+    width: '100%',
+  },
+
+  langBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '6px 10px',
+    backgroundColor: '#f8f9fa',
+    color: '#495057',
+    border: '1px solid #e9ecef',
+    borderRadius: '10px',
+    fontSize: '12.5px',
+    fontWeight: '700',
+    cursor: 'pointer',
+  },
+  authButtons: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexWrap: 'wrap',
+  },
+  loginBtn: {
+    padding: '8px 16px',
+    backgroundColor: '#ffffff',
+    color: '#1b4d3e',
+    border: '1.5px solid #dee2e6',
+    borderRadius: '12px',
+    fontSize: '13px',
+    fontWeight: '700',
+    cursor: 'pointer',
+  },
+  registerBtn: {
+    padding: '8px 16px',
+    backgroundColor: '#2d6a4f',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '12px',
+    fontSize: '13px',
+    fontWeight: '700',
+    cursor: 'pointer',
+  },
+
+  cartBtn: {
+    position: 'relative',
+    width: '38px',
+    height: '38px',
+    borderRadius: '12px',
+    backgroundColor: '#f8f9fa',
+    border: '1px solid #e9ecef',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
-    padding: '8px 24px',
-    backgroundColor: '#133c30',
-    color: '#ffffff',
-    fontSize: '12px',
-    fontWeight: '600',
-    letterSpacing: '0.05em',
-    border: 'none',
-    outline: 'none',
+    cursor: 'pointer',
+    color: '#212529',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: '-4px',
+    right: '-4px',
+    minWidth: '18px',
+    height: '18px',
+    borderRadius: '9px',
+    backgroundColor: '#e07a5f',
+    color: '#fff',
+    fontSize: '10px',
+    fontWeight: '800',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 4px',
+  },
+
+  notifBtn: {
+    position: 'relative',
+    width: '38px',
+    height: '38px',
+    borderRadius: '12px',
+    backgroundColor: '#f8f9fa',
+    border: '1px solid #e9ecef',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    color: '#212529',
+  },
+  notifBadge: {
+    position: 'absolute',
+    top: '-4px',
+    right: '-4px',
+    minWidth: '18px',
+    height: '18px',
+    borderRadius: '9px',
+    backgroundColor: '#dc3545',
+    color: '#fff',
+    fontSize: '10px',
+    fontWeight: '800',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 4px',
+  },
+
+  userMenuWrap: { position: 'relative' },
+  userPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '4px 8px 4px 4px',
+    backgroundColor: '#f8f9fa',
+    border: '1px solid #e9ecef',
+    borderRadius: '999px',
     cursor: 'pointer',
   },
-  pulseContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  pulseDot: {
-    width: '8px',
-    height: '8px',
-    backgroundColor: '#e07a5f',
+  avatar: {
+    width: '28px',
+    height: '28px',
     borderRadius: '50%',
-    animation: 'pulse 1.5s infinite',
-  },
-  toggleText: {
-    color: '#f4f1de',
-  },
-  consoleBody: {
-    padding: '16px 24px 20px 24px',
-    backgroundColor: '#1b4d3e',
-  },
-  header: {
-    marginBottom: '16px',
-  },
-  headerTitle: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-    marginBottom: '4px',
-  },
-  badge: {
-    backgroundColor: '#e07a5f',
+    justifyContent: 'center',
+    flexShrink: 0,
+    backgroundColor: '#2d6a4f',
     color: '#ffffff',
-    fontSize: '9px',
-    fontWeight: '800',
-    padding: '3px 8px',
-    borderRadius: '4px',
-    letterSpacing: '0.05em',
-  },
-  title: {
-    color: '#ffffff',
-    fontSize: '15px',
-    fontWeight: '700',
-    margin: 0,
-  },
-  subtitle: {
-    color: '#a3c2b8',
-    fontSize: '12px',
-    margin: 0,
-  },
-  sectionsContainer: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '24px',
-    '@media (max-width: 768px)': {
-      gridTemplateColumns: '1fr',
-      gap: '16px',
-    }
-  },
-  sectionCol: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  sectionTitle: {
     fontSize: '12px',
     fontWeight: '800',
-    color: '#f4f1de',
-    textTransform: 'uppercase',
-    letterSpacing: '0.05em',
-    marginBottom: '4px',
-    borderBottom: '1px solid rgba(255,255,255,0.08)',
-    paddingBottom: '4px',
+    overflow: 'hidden',
   },
-  btnGrid: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    borderRadius: '50%',
   },
-  screenBtn: {
+  userInfo: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'flex-start',
-    padding: '10px 14px',
-    borderRadius: '8px',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
-    textAlign: 'left',
-    transition: 'all 0.2s ease',
-    cursor: 'pointer',
-    width: '100%',
+    '@media (max-width: 480px)': { display: 'none' },
   },
-  activeScreenBtn: {
+  userName: { fontSize: '12.5px', fontWeight: '800', color: '#212529', lineHeight: '1.2' },
+  roleBadge: { fontSize: '10.5px', fontWeight: '700', color: '#6c757d', display: 'flex', alignItems: 'center' },
+
+  dropdown: {
+    position: 'absolute',
+    top: 'calc(100% + 8px)',
+    right: 0,
     backgroundColor: '#ffffff',
-    border: '1px solid #ffffff',
-    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',
+    border: '1px solid #e9ecef',
+    borderRadius: '14px',
+    boxShadow: '0 12px 32px rgba(0,0,0,0.1)',
+    padding: '8px',
+    minWidth: '200px',
+    zIndex: 300,
+    '@media (max-width: 480px)': { right: '-10px', minWidth: '180px' },
   },
-  btnText: {
-    color: '#ffffff',
-    fontSize: '12px',
-    fontWeight: '700',
-    marginBottom: '2px',
+  dropdownItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    width: '100%',
+    padding: '10px 12px',
+    background: 'none',
+    border: 'none',
+    color: '#212529',
+    fontSize: '13px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    borderRadius: '10px',
+    textAlign: 'left',
   },
-  activeBtnText: {
-    color: '#1b4d3e',
-  },
-  btnDesc: {
-    color: '#a3c2b8',
+  dropdownBadge: {
+    marginLeft: 'auto',
+    backgroundColor: '#dc3545',
+    color: '#fff',
     fontSize: '10px',
-    lineHeight: '1.2',
+    fontWeight: '800',
+    borderRadius: '50%',
+    padding: '2px 7px',
   },
-  activeBtnDesc: {
-    color: '#6c757d',
-  }
+  dropdownItemDanger: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    width: '100%',
+    padding: '10px 12px',
+    background: 'none',
+    border: 'none',
+    color: '#c0392b',
+    fontSize: '13px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    borderRadius: '10px',
+    textAlign: 'left',
+  },
+  dropdownDivider: {
+    height: '1px',
+    backgroundColor: '#f1f3f5',
+    margin: '6px 4px',
+  },
 };

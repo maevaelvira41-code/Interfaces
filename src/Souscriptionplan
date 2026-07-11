@@ -1,379 +1,70 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Check, Star, Zap, Crown, Shield, X } from 'lucide-react';
+regerder le probleme sur la page d'acceuil au niveau du navbar . je crois qu'on laisse le lien de catalogue produit dans la console de navigation c'est pas mieux ? et une fois cliquer sur la cetalogue sa affiche une nouvelle page avec des produits
 
-const plans = [
-  {
-    id: 'gratuit',
-    name: 'Gratuit',
-    price: 0,
-    color: '#6c757d',
-    bgColor: '#f8f9fa',
-    borderColor: '#dee2e6',
-    icon: <Shield size={28} color="#6c757d" />,
-    badge: null,
-    produitsMisEnAvant: 0,
-    features: [
-      'Publier jusqu\'à 5 produits',
-      'Position normale dans le catalogue',
-      'Messagerie avec les clients',
-      'Tableau de bord basique',
-    ],
-    notIncluded: [
-      'Produits mis en avant',
-      'Badge sponsorisé',
-      'Statistiques avancées',
-      'Support prioritaire',
-    ]
-  },
-  {
-    id: 'starter',
-    name: 'Starter',
-    price: 2000,
-    color: '#2d6a4f',
-    bgColor: '#e9f5ee',
-    borderColor: '#b7e4c7',
-    icon: <Zap size={28} color="#2d6a4f" />,
-    badge: '⭐ Populaire',
-    produitsMisEnAvant: 2,
-    features: [
-      'Publier jusqu\'à 20 produits',
-      '2 produits mis en avant',
-      'Badge ⭐ Sponsorisé',
-      'Messagerie avec les clients',
-      'Tableau de bord complet',
-      'Statistiques de base',
-    ],
-    notIncluded: [
-      'Support prioritaire',
-      'Tous les produits prioritaires',
-    ]
-  },
-  {
-    id: 'premium',
-    name: 'Premium',
-    price: 5000,
-    color: '#e07a5f',
-    bgColor: '#fff5f2',
-    borderColor: '#f5d4c8',
-    icon: <Star size={28} color="#e07a5f" />,
-    badge: '🔥 Recommandé',
-    produitsMisEnAvant: 5,
-    features: [
-      'Produits illimités',
-      '5 produits mis en avant',
-      'Badge 🔥 Premium',
-      'Priorité dans les résultats de recherche',
-      'Statistiques avancées',
-      'Support prioritaire',
-      'Certifications facilitées',
-    ],
-    notIncluded: [
-      'Tous les produits prioritaires',
-    ]
-  },
-  {
-    id: 'gold',
-    name: 'Gold',
-    price: 10000,
-    color: '#f5b041',
-    bgColor: '#fffbea',
-    borderColor: '#f5e4a0',
-    icon: <Crown size={28} color="#f5b041" />,
-    badge: '👑 Gold',
-    produitsMisEnAvant: 999,
-    features: [
-      'Produits illimités',
-      'TOUS les produits mis en avant',
-      'Badge 👑 Gold exclusif',
-      'Position N°1 garantie dans le catalogue',
-      'Statistiques complètes',
-      'Support dédié 24/7',
-      'Certification prioritaire',
-      'Page vendeur personnalisée',
-    ],
-    notIncluded: []
-  },
-];
 
-export default function SubscriptionPlans({ onBack, onSelectPlan, currentPlan = 'gratuit' }) {
-  const [selected, setSelected] = useState(null);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [activePlan, setActivePlan] = useState(currentPlan);
-  const [paymentMethod, setPaymentMethod] = useState('mtn');
+Diagnostiqué doublon navbar et planifié consolidation avec page catalogue dédiée
+Diagnostiqué doublon navbar et planifié consolidation avec page catalogue dédiée
+Bon œil — je vois exactement le problème sur la capture : il y a deux barres de navigation empilées :
 
-  const handleSelect = (plan) => {
-    if (plan.id === activePlan) return;
-    setSelected(plan);
-    setShowConfirm(true);
-  };
+Ma nouvelle NavigationConsole.jsx (fine, en haut : "AgroMarket · Accueil · Connexion/S'inscrire")
+La barre interne de AgroMarketHome.jsx (plus large, avec Accueil/Catalogue/Catégories/Comment ça marche + son propre Panier/Connexion)
+C'est redondant — il ne doit y en avoir qu'une seule. Et tu as raison : le lien "Catalogue" devrait vivre dans NavigationConsole et mener vers une vraie page dédiée listant les produits, plutôt que d'être noyé dans la home.
 
-  const handleConfirm = () => {
-    setActivePlan(selected.id);
-    setShowConfirm(false);
-    setSelected(null);
-    if (onSelectPlan) onSelectPlan(selected);
-  };
+Pour faire ça proprement, il me faut AgroMarketHome.jsx — pour :
 
-  return (
-    <div style={styles.wrapper}>
+Supprimer sa barre de navigation interne (doublon)
+Récupérer la vraie liste de produits qu'il utilise, afin de construire la page Catalogue avec les mêmes données (pas des données inventées de mon côté)
+Q : Peux-tu m'envoyer AgroMarketHome.jsx ?
+R : Je l'envoie maintenant
 
-      {/* Modal de confirmation paiement */}
-      {showConfirm && selected && (
-        <div style={styles.overlay}>
-          <div style={styles.confirmModal}>
-            <button style={styles.closeModal} onClick={() => setShowConfirm(false)}>
-              <X size={20} />
-            </button>
-            <h3 style={styles.confirmTitle}>Confirmer l'abonnement</h3>
-            <div style={{ ...styles.planBadge, backgroundColor: selected.bgColor, borderColor: selected.borderColor }}>
-              {selected.icon}
-              <div>
-                <p style={{ ...styles.planBadgeName, color: selected.color }}>{selected.name}</p>
-                <p style={styles.planBadgePrice}>{selected.price.toLocaleString()} FCFA / mois</p>
-              </div>
-            </div>
+Parfait, je t'attends — colle-le dès que tu l'as.
 
-            <p style={styles.confirmText}>Choisissez votre mode de paiement :</p>
 
-            <div style={styles.paymentOptions}>
-              {[
-                { id: 'mtn', label: 'MTN Mobile Money', icon: '📱' },
-                { id: 'orange', label: 'Orange Money', icon: '🟠' },
-              ].map(pm => (
-                <div
-                  key={pm.id}
-                  style={{
-                    ...styles.paymentOption,
-                    borderColor: paymentMethod === pm.id ? selected.color : '#dee2e6',
-                    backgroundColor: paymentMethod === pm.id ? selected.bgColor : '#ffffff',
-                  }}
-                  onClick={() => setPaymentMethod(pm.id)}
-                >
-                  <span style={styles.pmIcon}>{pm.icon}</span>
-                  <span style={styles.pmLabel}>{pm.label}</span>
-                  {paymentMethod === pm.id && <Check size={16} color={selected.color} />}
-                </div>
-              ))}
-            </div>
+import React, { useState } from 'react'; import { Search, ShoppingBag, Leaf, ShieldCheck, Truck, Star, ArrowRight, UserPlus, PackageSearch, Menu, X, Globe } from 'lucide-react'; const translations = { fr: { navHome: 'Accueil', navCatalogue: 'Catalogue', navCategories: 'Catégories', navHo
 
-            <div style={styles.confirmTotal}>
-              <span>Total à payer</span>
-              <span style={{ color: selected.color, fontWeight: '900', fontSize: '20px' }}>
-                {selected.price.toLocaleString()} FCFA
-              </span>
-            </div>
+pasted
 
-            <button
-              style={{ ...styles.confirmBtn, backgroundColor: selected.color }}
-              onClick={handleConfirm}
-            >
-              ✅ Confirmer et payer
-            </button>
-            <button style={styles.cancelConfirmBtn} onClick={() => setShowConfirm(false)}>
-              Annuler
-            </button>
-          </div>
-        </div>
-      )}
 
-      <div style={styles.container}>
+The user prompt is empty, so I cannot determine the primary language. However, based on the thinking block being in English, here is the summary: Diagnosed redundant navigation component and strategized conditional rendering solution
+The user prompt is empty, so I cannot determine the primary language. However, based on the thinking block being in English, here is the summary: Diagnosed redundant navigation component and strategized conditional rendering solution
+Bonne nouvelle : AgroMarketHome.jsx a déjà une navbar complète et fonctionnelle (connexion, panier, menu utilisateur, déconnexion, changement de langue). Le doublon vient simplement du fait que ma NavigationConsole.jsx s'affiche aussi sur l'écran home, alors qu'elle ne devrait couvrir que les écrans qui n'ont pas leur propre en-tête (login, produit, panier, etc.).
 
-        {/* Header */}
-        <div style={styles.header}>
-          {onBack && (
-            <button style={styles.backBtn} onClick={onBack}>
-              <ArrowLeft size={18} /> Retour
-            </button>
-          )}
-          <h1 style={styles.title}>Choisissez votre plan</h1>
-          <p style={styles.subtitle}>
-            Boostez la visibilité de vos produits et augmentez vos ventes
-          </p>
+Fix immédiat : je fais disparaître NavigationConsole sur l'écran home.
 
-          {/* Plan actuel */}
-          <div style={styles.currentPlanBadge}>
-            Votre plan actuel : <strong>{plans.find(p => p.id === activePlan)?.name || 'Gratuit'}</strong>
-          </div>
-        </div>
 
-        {/* Grille des plans */}
-        <div style={styles.plansGrid}>
-          {plans.map((plan) => {
-            const isActive = activePlan === plan.id;
-            const isRecommended = plan.id === 'premium';
-            return (
-              <div
-                key={plan.id}
-                style={{
-                  ...styles.planCard,
-                  borderColor: isActive ? plan.color : isRecommended ? plan.color : '#e9ecef',
-                  borderWidth: isActive || isRecommended ? '2px' : '1px',
-                  transform: isRecommended ? 'scale(1.03)' : 'scale(1)',
-                  boxShadow: isRecommended ? `0 20px 40px ${plan.color}22` : '0 8px 24px rgba(0,0,0,0.04)',
-                }}
-              >
-                {/* Badge */}
-                {plan.badge && (
-                  <div style={{ ...styles.badge, backgroundColor: plan.color }}>
-                    {plan.badge}
-                  </div>
-                )}
+Fichier modifié, a exécuté une commande, lu un fichier
+Fichier modifié, a exécuté une commande, lu un fichier
 
-                {isActive && (
-                  <div style={{ ...styles.badge, backgroundColor: '#2d6a4f', right: '16px', left: 'auto' }}>
-                    ✅ Actif
-                  </div>
-                )}
+Masquer NavigationConsole sur home (qui a déjà sa propre navbar complète)
 
-                <div style={{ ...styles.planIconWrap, backgroundColor: plan.bgColor }}>
-                  {plan.icon}
-                </div>
+NavigationConsole.jsx
++5
+-2
+I should check with them first about whether they still want a separate Catalogue page, since the anchor-scroll fix already addresses the visual duplicate issue they reported, and creating a dedicated page would require additional work to restructure the product data.
 
-                <h3 style={{ ...styles.planName, color: plan.color }}>{plan.name}</h3>
 
-                <div style={styles.priceWrap}>
-                  {plan.price === 0 ? (
-                    <span style={{ ...styles.planPrice, color: plan.color }}>Gratuit</span>
-                  ) : (
-                    <>
-                      <span style={{ ...styles.planPrice, color: plan.color }}>
-                        {plan.price.toLocaleString()}
-                      </span>
-                      <span style={styles.pricePeriod}> FCFA / mois</span>
-                    </>
-                  )}
-                </div>
+Copier NavigationConsole.jsx corrigé vers outputs
 
-                {plan.produitsMisEnAvant > 0 && (
-                  <div style={{ ...styles.highlightBox, backgroundColor: plan.bgColor, borderColor: plan.borderColor }}>
-                    <Star size={14} color={plan.color} />
-                    <span style={{ color: plan.color, fontWeight: '700', fontSize: '13px' }}>
-                      {plan.produitsMisEnAvant === 999
-                        ? 'Tous les produits mis en avant'
-                        : `${plan.produitsMisEnAvant} produits mis en avant`}
-                    </span>
-                  </div>
-                )}
+Script
 
-                {/* Features */}
-                <div style={styles.featureList}>
-                  {plan.features.map((f, i) => (
-                    <div key={i} style={styles.featureItem}>
-                      <Check size={14} color={plan.color} />
-                      <span style={styles.featureText}>{f}</span>
-                    </div>
-                  ))}
-                  {plan.notIncluded.map((f, i) => (
-                    <div key={i} style={styles.featureItem}>
-                      <X size={14} color="#adb5bd" />
-                      <span style={{ ...styles.featureText, color: '#adb5bd', textDecoration: 'line-through' }}>{f}</span>
-                    </div>
-                  ))}
-                </div>
+Presented file
+Terminé
+Le doublon est réglé. Sur home, tu ne verras plus que la navbar de AgroMarketHome (celle avec Accueil/Catalogue/Catégories/Comment ça marche + panier + menu utilisateur) — NavigationConsole ne s'affiche plus que sur les autres écrans (connexion, produit, panier, etc.).
 
-                <button
-                  style={{
-                    ...styles.selectBtn,
-                    backgroundColor: isActive ? '#e9ecef' : plan.color,
-                    color: isActive ? '#6c757d' : '#ffffff',
-                    cursor: isActive ? 'default' : 'pointer',
-                  }}
-                  onClick={() => handleSelect(plan)}
-                  disabled={isActive}
-                >
-                  {isActive ? '✅ Plan actuel' : `Choisir ${plan.name}`}
-                </button>
-              </div>
-            );
-          })}
-        </div>
+Concernant ta 2e demande — une vraie page séparée pour le catalogue (au lieu du lien #produits qui scroll juste vers le bas de la home) — c'est faisable, mais avant de le faire, un point d'architecture à trancher :
 
-        {/* Section comparaison */}
-        <div style={styles.compareSection}>
-          <h2 style={styles.compareTitle}>Comment les produits sponsorisés sont affichés ?</h2>
-          <div style={styles.compareGrid}>
-            <div style={styles.compareCard}>
-              <div style={styles.compareBadge} >⭐ Sponsorisé</div>
-              <div style={styles.compareImg}>🍌</div>
-              <p style={styles.compareText}>Banane Fraîche</p>
-              <p style={styles.comparePrice}>2 500 FCFA</p>
-            </div>
-            <div style={styles.compareCard}>
-              <div style={{ ...styles.compareBadge, backgroundColor: '#e07a5f' }}>🔥 Premium</div>
-              <div style={styles.compareImg}>🍅</div>
-              <p style={styles.compareText}>Tomate Bio</p>
-              <p style={styles.comparePrice}>1 500 FCFA</p>
-            </div>
-            <div style={styles.compareCard}>
-              <div style={{ ...styles.compareBadge, backgroundColor: '#f5b041' }}>👑 Gold</div>
-              <div style={styles.compareImg}>🥕</div>
-              <p style={styles.compareText}>Carotte Bio</p>
-              <p style={styles.comparePrice}>800 FCFA</p>
-            </div>
-            <div style={{ ...styles.compareCard, opacity: 0.5 }}>
-              <div style={styles.compareImg}>🌽</div>
-              <p style={styles.compareText}>Maïs</p>
-              <p style={styles.comparePrice}>3 000 FCFA</p>
-              <p style={styles.compareNormal}>Position normale</p>
-            </div>
-          </div>
-        </div>
+Les 27 produits sont actuellement codés en dur à l'intérieur de AgroMarketHome.jsx (trendingProducts). Pour créer une vraie page Catalogue séparée, il faut sortir cette liste dans un endroit partagé (ex: App.jsx ou un fichier data/products.js) pour que Home et Catalogue utilisent exactement les mêmes données.
 
-      </div>
-    </div>
-  );
-}
+Q : On construit la page Catalogue séparée maintenant ?
+R : Oui, crée une vraie page Catalogue séparée (je sors les produits dans un fichier partagé)
 
-const styles = {
-  wrapper: { minHeight: '100vh', backgroundColor: '#f8f9fa', fontFamily: "'Plus Jakarta Sans', sans-serif" },
-  container: { maxWidth: '1200px', margin: '0 auto', padding: '40px 24px 80px' },
 
-  header: { textAlign: 'center', marginBottom: '48px', position: 'relative' },
-  backBtn: { position: 'absolute', left: 0, top: 0, display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', color: '#212529', fontSize: '14px', fontWeight: '700', cursor: 'pointer' },
-  title: { fontSize: '36px', fontWeight: '900', color: '#1b4d3e', margin: '0 0 12px 0', letterSpacing: '-0.02em' },
-  subtitle: { fontSize: '16px', color: '#6c757d', margin: '0 0 20px 0' },
-  currentPlanBadge: { display: 'inline-block', padding: '8px 20px', backgroundColor: '#e9f5ee', color: '#2d6a4f', borderRadius: '20px', fontSize: '14px', fontWeight: '600', border: '1px solid #b7e4c7' },
+Orchestrated refactoring pour consolider données produits partagées
+Orchestrated refactoring pour consolider données produits partagées
+Maintenant je crée AgroMarketHome.jsx localement (importé du même contenu) et je le fais pointer vers les données partagées, puis je construis ProductCatalog.jsx :
 
-  plansGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '60px' },
 
-  planCard: { backgroundColor: '#ffffff', borderRadius: '24px', padding: '28px 20px', border: 'solid', position: 'relative', display: 'flex', flexDirection: 'column', gap: '16px', transition: 'all 0.2s ease' },
-  badge: { position: 'absolute', top: '-12px', left: '16px', backgroundColor: '#2d6a4f', color: '#ffffff', fontSize: '11px', fontWeight: '800', padding: '4px 12px', borderRadius: '20px' },
-  planIconWrap: { width: '56px', height: '56px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  planName: { fontSize: '22px', fontWeight: '900', margin: 0 },
-  priceWrap: { display: 'flex', alignItems: 'baseline', gap: '2px' },
-  planPrice: { fontSize: '28px', fontWeight: '900' },
-  pricePeriod: { fontSize: '13px', color: '#6c757d', fontWeight: '600' },
-  highlightBox: { display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px', borderRadius: '10px', border: '1px solid' },
-  featureList: { display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 },
-  featureItem: { display: 'flex', alignItems: 'flex-start', gap: '8px' },
-  featureText: { fontSize: '13px', color: '#212529', fontWeight: '500', lineHeight: '1.4' },
-  selectBtn: { width: '100%', padding: '12px', border: 'none', borderRadius: '14px', fontSize: '14px', fontWeight: '800', transition: 'opacity 0.2s' },
+Pivoted toward file manipulation technique
+Pivoted toward file manipulation technique
 
-  // Modal confirmation
-  overlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)', padding: '24px' },
-  confirmModal: { backgroundColor: '#ffffff', borderRadius: '24px', padding: '32px', width: '100%', maxWidth: '420px', position: 'relative', boxShadow: '0 32px 64px rgba(0,0,0,0.15)' },
-  closeModal: { position: 'absolute', top: '16px', right: '16px', background: 'none', border: 'none', cursor: 'pointer', color: '#6c757d' },
-  confirmTitle: { fontSize: '22px', fontWeight: '900', color: '#212529', margin: '0 0 20px 0', textAlign: 'center' },
-  planBadge: { display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', borderRadius: '16px', border: '1.5px solid', marginBottom: '20px' },
-  planBadgeName: { fontSize: '18px', fontWeight: '800', margin: 0 },
-  planBadgePrice: { fontSize: '14px', color: '#6c757d', margin: '4px 0 0 0' },
-  confirmText: { fontSize: '14px', fontWeight: '700', color: '#212529', margin: '0 0 12px 0' },
-  paymentOptions: { display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' },
-  paymentOption: { display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', border: '1.5px solid', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s' },
-  pmIcon: { fontSize: '20px' },
-  pmLabel: { flex: 1, fontSize: '14px', fontWeight: '700', color: '#212529' },
-  confirmTotal: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: '#f8f9fa', borderRadius: '12px', marginBottom: '16px', fontSize: '15px', fontWeight: '700', color: '#212529' },
-  confirmBtn: { width: '100%', padding: '14px', color: '#ffffff', border: 'none', borderRadius: '14px', fontSize: '15px', fontWeight: '800', cursor: 'pointer', marginBottom: '10px' },
-  cancelConfirmBtn: { width: '100%', padding: '12px', backgroundColor: '#f1f3f5', color: '#495057', border: 'none', borderRadius: '14px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' },
 
-  // Comparaison
-  compareSection: { textAlign: 'center' },
-  compareTitle: { fontSize: '22px', fontWeight: '800', color: '#212529', margin: '0 0 24px 0' },
-  compareGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' },
-  compareCard: { backgroundColor: '#ffffff', borderRadius: '16px', padding: '20px', border: '1px solid #e9ecef', position: 'relative' },
-  compareBadge: { position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#2d6a4f', color: '#ffffff', fontSize: '10px', fontWeight: '800', padding: '3px 10px', borderRadius: '20px', whiteSpace: 'nowrap' },
-  compareImg: { fontSize: '40px', marginBottom: '8px', marginTop: '8px' },
-  compareText: { fontSize: '13px', fontWeight: '700', color: '#212529', margin: '0 0 4px 0' },
-  comparePrice: { fontSize: '14px', fontWeight: '800', color: '#e07a5f', margin: 0 },
-  compareNormal: { fontSize: '11px', color: '#adb5bd', margin: '4px 0 0 0' },
-};
+Vous n’avez plus de messages gratuits jusqu’à 14:40.

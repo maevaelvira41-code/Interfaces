@@ -1,74 +1,38 @@
+
 import React, { useState, useMemo } from 'react';
 
-const INITIAL_SELLER_PRODUCTS = [
-  {
-    id: 1,
-    name: 'Banane Fraîche',
-    category: 'Fruits',
-    stock: 45,
-    unit: 'kg',
-    sales: 124,
-    price: 2500,
-    status: 'Actif',
-    imageUrl: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=150&auto=format&fit=crop&q=60'
-  },
-  {
-    id: 2,
-    name: 'Tomate Bio',
-    category: 'Légumes',
-    stock: 0,
-    unit: 'kg',
-    sales: 89,
-    price: 1500,
-    status: 'Actif',
-    imageUrl: 'https://images.unsplash.com/photo-1595855759920-86582396756a?w=150&auto=format&fit=crop&q=60'
-  },
-  {
-    id: 3,
-    name: 'Maïs Premium',
-    category: 'Céréales',
-    stock: 15,
-    unit: 'kg',
-    sales: 45,
-    price: 3000,
-    status: 'Inactif',
-    imageUrl: 'https://images.unsplash.com/photo-1551754625-7fc5b945222b?w=150&auto=format&fit=crop&q=60'
-  },
-  {
-    id: 4,
-    name: 'Miel de Casamance',
-    category: 'Miel',
-    stock: 8,
-    unit: 'L',
-    sales: 32,
-    price: 4500,
-    status: 'Actif',
-    imageUrl: 'https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=150&auto=format&fit=crop&q=60'
-  }
-];
+const PLACEHOLDER_IMG = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 100 100" style="background:%23e2e8f0;"><text x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-size="24">🌱</text></svg>';
 
-export default function MyProducts({ onNavigateToAddProduct, onEditProduct }) {
-  const [products, setProducts] = useState(INITIAL_SELLER_PRODUCTS);
+// Normalise un produit vendeur (les champs peuvent varier selon AddProduct.jsx)
+// afin que l'affichage ne casse jamais, même avec des données minimales.
+const normalize = (p) => ({
+  id: p.id,
+  name: p.name || 'Produit sans nom',
+  category: p.category || 'Général',
+  stock: p.stock ?? 0,
+  unit: p.unit || 'kg',
+  sales: p.sales ?? 0,
+  price: p.price ?? 0,
+  status: p.status || 'Actif',
+  imageUrl: p.imageUrl || p.image || PLACEHOLDER_IMG,
+});
+
+export default function MyProducts({ products = [], onNavigateToAddProduct, onEditProduct, onDeleteProduct, onDuplicateProduct }) {
+  const normalized = useMemo(() => products.map(normalize), [products]);
   const [filterTab, setFilterTab] = useState('Tous');
   const [notification, setNotification] = useState('');
 
   // Handle product deletion
   const handleDelete = (id, name) => {
     if (window.confirm(`Êtes-vous sûr de vouloir supprimer le produit "${name}" ?`)) {
-      setProducts(prev => prev.filter(p => p.id !== id));
+      onDeleteProduct && onDeleteProduct(id);
       showToast(`Produit "${name}" supprimé avec succès !`);
     }
   };
 
   // Handle product duplication
   const handleDuplicate = (product) => {
-    const newProduct = {
-      ...product,
-      id: Date.now(),
-      name: `${product.name} (Copie)`,
-      sales: 0 // Reset sales for duplicated item
-    };
-    setProducts(prev => [...prev, newProduct]);
+    onDuplicateProduct && onDuplicateProduct(product);
     showToast(`Produit "${product.name}" dupliqué !`);
   };
 
@@ -81,18 +45,18 @@ export default function MyProducts({ onNavigateToAddProduct, onEditProduct }) {
   // Counts for tabs
   const counts = useMemo(() => {
     return {
-      tous: products.length,
-      actifs: products.filter(p => p.status === 'Actif').length,
-      inactifs: products.filter(p => p.status === 'Inactif').length
+      tous: normalized.length,
+      actifs: normalized.filter(p => p.status === 'Actif').length,
+      inactifs: normalized.filter(p => p.status === 'Inactif').length
     };
-  }, [products]);
+  }, [normalized]);
 
   // Filtered products list
   const filteredProducts = useMemo(() => {
-    if (filterTab === 'Actifs') return products.filter(p => p.status === 'Actif');
-    if (filterTab === 'Inactifs') return products.filter(p => p.status === 'Inactif');
-    return products;
-  }, [products, filterTab]);
+    if (filterTab === 'Actifs') return normalized.filter(p => p.status === 'Actif');
+    if (filterTab === 'Inactifs') return normalized.filter(p => p.status === 'Inactif');
+    return normalized;
+  }, [normalized, filterTab]);
 
   return (
     <div style={styles.container} className="fade-in">
@@ -164,7 +128,7 @@ export default function MyProducts({ onNavigateToAddProduct, onEditProduct }) {
                           alt={prod.name} 
                           style={styles.image}
                           onError={(e) => {
-                            e.target.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 100 100" style="background:%23e2e8f0;"><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="24">🌱</text></svg>';
+                            e.target.src = PLACEHOLDER_IMG;
                           }}
                         />
                       </div>
@@ -284,10 +248,8 @@ const styles = {
     fontWeight: '700',
     transition: 'all 0.2s',
     boxShadow: '0 4px 10px rgba(27,77,62,0.15)',
-    ':hover': {
-      backgroundColor: '#2d6a4f',
-      transform: 'translateY(-1px)',
-    }
+    border: 'none',
+    cursor: 'pointer',
   },
   addIcon: {
     fontSize: '16px',
@@ -321,9 +283,9 @@ const styles = {
     padding: '8px 16px',
     borderRadius: '6px',
     transition: 'all 0.2s',
-    ':hover': {
-      color: '#1b4d3e',
-    }
+    border: 'none',
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
   },
   tabBtnActive: {
     backgroundColor: '#1b4d3e',
@@ -358,9 +320,6 @@ const styles = {
   tr: {
     borderBottom: '1px solid #e9ecef',
     transition: 'background 0.2s',
-    ':hover': {
-      backgroundColor: '#fdfdfb',
-    }
   },
   td: {
     fontSize: '13px',
@@ -443,15 +402,9 @@ const styles = {
     border: 'none',
     transition: 'color 0.2s',
     cursor: 'pointer',
-    ':hover': {
-      color: '#e07a5f',
-    }
   },
   deleteBtn: {
     color: '#dc3545',
-    ':hover': {
-      color: '#bd2130',
-    }
   },
   actionDivider: {
     color: '#dee2e6',
@@ -485,8 +438,7 @@ const styles = {
     fontSize: '13px',
     fontWeight: '700',
     transition: 'all 0.2s',
-    ':hover': {
-      backgroundColor: '#2d6a4f',
-    }
+    border: 'none',
+    cursor: 'pointer',
   }
 };

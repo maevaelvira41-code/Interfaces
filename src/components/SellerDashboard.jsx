@@ -1,752 +1,805 @@
+// src/components/SellerDashboard.jsx
 import React, { useState } from 'react';
+import {
+  LayoutDashboard, Package, ShoppingBag, Bell, User,
+  BarChart3, AlertTriangle, LogOut, Menu, X,
+  ShoppingCart, DollarSign, Award, CheckCircle, XCircle,
+  Shield, Clock, Plus, Edit, Trash2, Send, CreditCard,
+  Upload
+} from 'lucide-react';
+import VendeurOrders from './VendeurOrders';
 
-const kpis = [
-  {
-    id: 'revenue',
-    label: 'Revenus du mois',
-    value: '1 248 500',
-    unit: 'FCFA',
-    change: '+18.4%',
-    up: true,
-    icon: '💰',
-    color: '#2d6a4f',
-    bg: '#d8f3dc',
-  },
-  {
-    id: 'orders',
-    label: 'Commandes reçues',
-    value: '87',
-    unit: 'commandes',
-    change: '+12.1%',
-    up: true,
-    icon: '📦',
-    color: '#1b4d3e',
-    bg: '#e9f5ee',
-  },
-  {
-    id: 'products',
-    label: 'Produits actifs',
-    value: '34',
-    unit: 'articles',
-    change: '+3',
-    up: true,
-    icon: '🌿',
-    color: '#40916c',
-    bg: '#f0faf3',
-  },
-  {
-    id: 'rating',
-    label: 'Note moyenne',
-    value: '4.8',
-    unit: '/ 5',
-    change: '▲ 0.2',
-    up: true,
-    icon: '⭐',
-    color: '#e07a5f',
-    bg: '#fdf1ed',
-  },
+const menuItems = [
+  { id: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={18} /> },
+  { id: 'sales', label: 'Historique des ventes', icon: <BarChart3 size={18} /> },
+  { id: 'products', label: 'Mes produits', icon: <Package size={18} /> },
+  { id: 'stock', label: 'Alertes stock', icon: <AlertTriangle size={18} /> },
+  { id: 'orders', label: 'Mes commandes', icon: <ShoppingBag size={18} /> },
+  { id: 'subscriptions', label: 'Mon abonnement', icon: <Award size={18} /> },
+  { id: 'certification', label: 'Ma certification', icon: <Shield size={18} /> },
+  { id: 'notifications', label: 'Notifications', icon: <Bell size={18} /> },
+  { id: 'profile', label: 'Mon profil', icon: <User size={18} /> },
 ];
 
-const chartData = [42, 68, 55, 80, 72, 95, 88, 110, 102, 130, 118, 145];
-const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-
-const recentOrders = [
-  { id: '#2026-087', client: 'Bakari Sow', product: 'Mangue Premium', amount: '45,000 FCFA', status: 'Livrée', statusColor: '#2d6a4f', statusBg: '#d8f3dc' },
-  { id: '#2026-086', client: 'Aminata Fall', product: 'Tomate fraîche', amount: '12,500 FCFA', status: 'En livraison', statusColor: '#0066cc', statusBg: '#e0f0ff' },
-  { id: '#2026-085', client: 'Kofi Mensah', product: 'Ananas Bio', amount: '28,000 FCFA', status: 'En préparation', statusColor: '#e07a5f', statusBg: '#fdf1ed' },
-  { id: '#2026-084', client: 'Fatou Diallo', product: 'Gombo séché', amount: '8,500 FCFA', status: 'En attente', statusColor: '#6c757d', statusBg: '#f1f3f5' },
+const plans = [
+  { id: 'gratuit', name: 'Gratuit', price: 0, features: ['5 produits max', 'Position normale'] },
+  { id: 'starter', name: 'Starter', price: 2000, features: ['20 produits', '2 produits sponsorisés'] },
+  { id: 'premium', name: 'Premium', price: 5000, features: ['Produits illimités', '5 produits sponsorisés'] },
+  { id: 'gold', name: 'Gold', price: 10000, features: ['Produits illimités', 'Tous sponsorisés'] },
 ];
 
-const topProducts = [
-  { name: 'Mangue Premium', sold: 234, revenue: '351,000', emoji: '🥭', pct: 84 },
-  { name: 'Ananas Bio', sold: 178, revenue: '267,000', emoji: '🍍', pct: 64 },
-  { name: 'Banane Fraîche', sold: 145, revenue: '217,500', emoji: '🍌', pct: 52 },
-  { name: 'Tomate fraîche', sold: 89, revenue: '111,250', emoji: '🍅', pct: 32 },
+const paymentMethods = [
+  { id: 'orange-money', label: 'Orange Money', icon: '📱' },
+  { id: 'mtn-money', label: 'MTN Mobile Money', icon: '📱' },
 ];
 
-const quickActions = [
-  { label: 'Ajouter un produit', icon: '➕', action: 'add-product', color: '#1b4d3e' },
-  { label: 'Voir les commandes', icon: '📋', action: 'order-management-admin', color: '#2d6a4f' },
-  { label: 'Mes produits', icon: '🌿', action: 'my-products', color: '#40916c' },
-  { label: 'Mon abonnement', icon: '💎', action: 'plans', color: '#e07a5f' },
-];
+export default function SellerDashboard({
+  onNavigate,
+  onLogout,
+  currentUser,
+  vendeurProducts = [],
+  adminOrders = [],
+  activePlan = 'gratuit',
+  onSelectPlan,
+  onUpdateOrderStatus,
+}) {
+  const [activeMenu, setActiveMenu] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
 
-export default function SellerDashboard({ onNavigate }) {
-  const [hoveredBar, setHoveredBar] = useState(null);
-  const [tooltip, setTooltip] = useState('');
+  const [certificationStatus, setCertificationStatus] = useState('none');
+  const [certificationData, setCertificationData] = useState({
+    cni: null,
+    cniFile: null,
+    diplome: null,
+    diplomeFile: null,
+  });
 
-  const maxVal = Math.max(...chartData);
+  const totalProducts = vendeurProducts.length;
+  const totalOrders = adminOrders.filter(o => {
+    return o.items?.some(item =>
+      vendeurProducts.some(p => p.name === item.nomProduit || p.name === item.name)
+    );
+  }).length;
+  const totalRevenue = adminOrders.reduce((sum, order) => {
+    const orderRevenue = order.items?.filter(item =>
+      vendeurProducts.some(p => p.name === item.nomProduit || p.name === item.name)
+    ).reduce((s, item) => s + (item.subtotal || 0), 0);
+    return sum + (orderRevenue || 0);
+  }, 0);
+  const lowStockItems = vendeurProducts.filter(p => p.stock <= 10);
 
-  const showToast = (msg) => {
-    setTooltip(msg);
-    setTimeout(() => setTooltip(''), 3000);
+  const months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+  const monthlyRevenue = months.map((_, idx) => {
+    return adminOrders
+      .filter(o => {
+        const d = new Date(o.date);
+        return d.getMonth() === idx && d.getFullYear() === new Date().getFullYear();
+      })
+      .reduce((sum, order) => {
+        const orderRevenue = order.items?.filter(item =>
+          vendeurProducts.some(p => p.name === item.nomProduit || p.name === item.name)
+        ).reduce((s, item) => s + (item.subtotal || 0), 0);
+        return sum + (orderRevenue || 0);
+      }, 0);
+  });
+  const maxRevenue = Math.max(1, ...monthlyRevenue);
+
+  const handleCertificationSubmit = () => {
+    if (!certificationData.cniFile || !certificationData.diplomeFile) {
+      alert('Veuillez fournir votre CNI et votre diplôme de formation agricole');
+      return;
+    }
+    setCertificationStatus('pending');
+    alert('✅ Votre demande de certification a été envoyée. Elle sera examinée sous 24 à 48h.');
   };
 
-  return (
-    <div style={styles.container} className="fade-in">
+  const handleSelectPlanClick = (plan) => {
+    if (plan.price === 0) {
+      if (onSelectPlan) {
+        onSelectPlan(plan);
+        alert(`✅ Abonnement ${plan.name} activé avec succès !`);
+      }
+      return;
+    }
+    setSelectedPlan(plan);
+    setPaymentMethod('');
+    setPaymentSuccess(false);
+    setShowPaymentModal(true);
+    setShowPlanModal(false);
+  };
 
-      {/* Toast */}
-      {tooltip && (
-        <div style={styles.toast} className="fade-in">
-          {tooltip}
+  const handlePaymentSubmit = () => {
+    if (!paymentMethod) {
+      alert('Veuillez sélectionner un mode de paiement');
+      return;
+    }
+    setPaymentLoading(true);
+    setTimeout(() => {
+      setPaymentLoading(false);
+      setPaymentSuccess(true);
+      if (onSelectPlan && selectedPlan) {
+        onSelectPlan(selectedPlan);
+      }
+      setTimeout(() => {
+        setShowPaymentModal(false);
+        setSelectedPlan(null);
+        setPaymentMethod('');
+        setPaymentSuccess(false);
+      }, 2000);
+    }, 1500);
+  };
+
+  // ===== RENDER FUNCTIONS =====
+  const renderDashboard = () => (
+    <>
+      <div style={styles.pageHeader}>
+        <h2 style={styles.pageTitle}>Tableau de bord</h2>
+        <p style={styles.pageSubtitle}>Bienvenue sur votre espace vendeur</p>
+      </div>
+
+      {certificationStatus === 'pending' && (
+        <div style={styles.alertBanner}>
+          <Clock size={20} color="#f5b041" />
+          <span><strong>Votre demande de certification</strong> est en cours d'examen</span>
+        </div>
+      )}
+      {certificationStatus === 'approved' && (
+        <div style={{ ...styles.alertBanner, backgroundColor: '#e9f5ee', borderColor: '#b7e4c7' }}>
+          <CheckCircle size={20} color="#2d6a4f" />
+          <span><strong>✅ Votre compte est certifié</strong></span>
+        </div>
+      )}
+      {certificationStatus === 'none' && (
+        <div style={{ ...styles.alertBanner, backgroundColor: '#fffbea', borderColor: '#f5e4a0', cursor: 'pointer' }}
+          onClick={() => setActiveMenu('certification')}>
+          <Shield size={20} color="#f5b041" />
+          <span><strong>Obtenez votre certification</strong> pour gagner la confiance des clients</span>
+          <span style={styles.alertLink}>Commencer →</span>
         </div>
       )}
 
-      {/* ─── Page Header ─── */}
-      <div style={styles.pageHeader}>
-        <div>
-          <p style={styles.greeting}>Bonjour, Jean-Pierre 👋</p>
-          <h2 style={styles.pageTitle}>Tableau de bord Vendeur</h2>
-          <p style={styles.pageSubtitle}>Juin 2026 · AgroMarket Pro</p>
+      <div style={styles.kpiGrid}>
+        <div style={styles.kpiCard}>
+          <div style={{ ...styles.kpiIcon, backgroundColor: '#e9f5ee' }}><Package size={20} color="#2d6a4f" /></div>
+          <div><p style={styles.kpiLabel}>Produits</p><p style={styles.kpiValue}>{totalProducts}</p></div>
         </div>
-        <div style={styles.headerActions}>
-          <button
-            style={styles.exportBtn}
-            onClick={() => showToast('📊 Export du rapport mensuel en cours...')}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Exporter rapport
-          </button>
+        <div style={styles.kpiCard}>
+          <div style={{ ...styles.kpiIcon, backgroundColor: '#e9f5ee' }}><ShoppingBag size={20} color="#2d6a4f" /></div>
+          <div><p style={styles.kpiLabel}>Commandes</p><p style={styles.kpiValue}>{totalOrders}</p></div>
+        </div>
+        <div style={styles.kpiCard}>
+          <div style={{ ...styles.kpiIcon, backgroundColor: '#fff3e0' }}><DollarSign size={20} color="#f5b041" /></div>
+          <div><p style={styles.kpiLabel}>Revenu total</p><p style={styles.kpiValue}>{totalRevenue.toLocaleString()} FCFA</p></div>
+        </div>
+        <div style={styles.kpiCard}>
+          <div style={{ ...styles.kpiIcon, backgroundColor: '#fdf1ed' }}><AlertTriangle size={20} color="#e07a5f" /></div>
+          <div><p style={styles.kpiLabel}>Stock critique</p><p style={styles.kpiValue}>{lowStockItems.length}</p></div>
         </div>
       </div>
 
-      {/* ─── KPI Cards ─── */}
-      <div style={styles.kpiGrid}>
-        {kpis.map((kpi) => (
-          <div key={kpi.id} style={styles.kpiCard}>
-            <div style={styles.kpiTop}>
-              <div style={{ ...styles.kpiIconWrap, backgroundColor: kpi.bg }}>
-                <span style={styles.kpiIcon}>{kpi.icon}</span>
+      <div style={styles.chartCard}>
+        <h3 style={styles.chartTitle}>Ventes mensuelles</h3>
+        <div style={styles.chartArea}>
+          {monthlyRevenue.map((val, i) => {
+            const h = (val / maxRevenue) * 100;
+            return (
+              <div key={i} style={styles.barGroup}>
+                <div style={{ ...styles.bar, height: `${Math.max(h, 4)}%` }} />
+                <span style={styles.barLabel}>{months[i].slice(0, 3)}</span>
               </div>
-              <span style={{
-                ...styles.kpiChange,
-                color: kpi.up ? '#2d6a4f' : '#dc3545',
-                backgroundColor: kpi.up ? '#d8f3dc' : '#fde8ea',
-              }}>
-                {kpi.up ? '▲' : '▼'} {kpi.change}
-              </span>
-            </div>
-            <p style={styles.kpiLabel}>{kpi.label}</p>
-            <p style={styles.kpiValue}>
-              {kpi.value}
-              <span style={styles.kpiUnit}> {kpi.unit}</span>
-            </p>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={styles.tableCard}>
+        <h3 style={styles.chartTitle}>Dernières commandes</h3>
+        {adminOrders.slice(-3).reverse().map(order => (
+          <div key={order.id} style={styles.orderRow}>
+            <span style={styles.orderId}>#{order.id}</span>
+            <span style={styles.orderClient}>{order.client}</span>
+            <span style={styles.orderAmount}>{order.amount.toLocaleString()} FCFA</span>
+            <span style={{
+              ...styles.orderStatus,
+              backgroundColor: order.status === 'Livrée' ? '#e9f5ee' : '#fff3e0',
+              color: order.status === 'Livrée' ? '#2d6a4f' : '#f5b041',
+            }}>{order.status}</span>
           </div>
         ))}
       </div>
+    </>
+  );
 
-      {/* ─── Main Grid ─── */}
-      <div style={styles.mainGrid}>
-
-        {/* ─── Revenue Chart ─── */}
-        <div style={styles.chartCard}>
-          <div style={styles.cardHeader}>
-            <div>
-              <h3 style={styles.cardTitle}>Évolution des revenus</h3>
-              <p style={styles.cardSubtitle}>Ventes mensuelles en FCFA (2026)</p>
-            </div>
-            <div style={styles.chartLegend}>
-              <span style={styles.legendDot}></span>
-              <span style={styles.legendText}>Revenus</span>
-            </div>
-          </div>
-
-          <div style={styles.chartArea}>
-            {chartData.map((val, i) => {
-              const barHeight = (val / maxVal) * 120;
-              const isHovered = hoveredBar === i;
-              return (
-                <div key={i} style={styles.barGroup}
-                  onMouseEnter={() => setHoveredBar(i)}
-                  onMouseLeave={() => setHoveredBar(null)}
-                >
-                  {isHovered && (
-                    <div style={styles.barTooltip}>
-                      {(val * 10000).toLocaleString('fr-FR')} FCFA
-                    </div>
-                  )}
-                  <div
-                    style={{
-                      ...styles.bar,
-                      height: `${barHeight}px`,
-                      backgroundColor: isHovered ? '#1b4d3e' : '#2d6a4f',
-                      opacity: isHovered ? 1 : 0.8,
-                      transform: isHovered ? 'scaleY(1.04)' : 'scaleY(1)',
-                    }}
-                  />
-                  <span style={styles.barLabel}>{months[i]}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ─── Top Products ─── */}
-        <div style={styles.topProductsCard}>
-          <div style={styles.cardHeader}>
-            <div>
-              <h3 style={styles.cardTitle}>Top produits</h3>
-              <p style={styles.cardSubtitle}>Classement par ventes</p>
-            </div>
-          </div>
-          <div style={styles.productsList}>
-            {topProducts.map((p, i) => (
-              <div key={p.name} style={styles.productItem}>
-                <div style={styles.productLeft}>
-                  <span style={styles.productRank}>#{i + 1}</span>
-                  <span style={styles.productEmoji}>{p.emoji}</span>
-                  <div>
-                    <p style={styles.productName}>{p.name}</p>
-                    <p style={styles.productSold}>{p.sold} ventes</p>
-                  </div>
-                </div>
-                <div style={styles.productRight}>
-                  <p style={styles.productRevenue}>{p.revenue} FCFA</p>
-                  <div style={styles.progressBar}>
-                    <div style={{ ...styles.progressFill, width: `${p.pct}%` }} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+  const renderSalesHistory = () => (
+    <>
+      <div style={styles.pageHeader}>
+        <h2 style={styles.pageTitle}>Historique des ventes</h2>
+        <p style={styles.pageSubtitle}>Suivi détaillé de vos transactions</p>
       </div>
-
-      {/* ─── Bottom Grid ─── */}
-      <div style={styles.bottomGrid}>
-
-        {/* ─── Recent Orders ─── */}
-        <div style={styles.recentOrdersCard}>
-          <div style={styles.cardHeader}>
-            <div>
-              <h3 style={styles.cardTitle}>Commandes récentes</h3>
-              <p style={styles.cardSubtitle}>4 dernières commandes</p>
-            </div>
-            {onNavigate && (
-              <button
-                style={styles.viewAllBtn}
-                onClick={() => onNavigate('order-management-admin')}
-              >
-                Tout voir →
-              </button>
-            )}
-          </div>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>N° Commande</th>
-                <th style={styles.th}>Client</th>
-                <th style={styles.th}>Produit</th>
-                <th style={styles.th}>Montant</th>
-                <th style={styles.th}>Statut</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentOrders.map((order) => (
-                <tr key={order.id} style={styles.tr}>
-                  <td style={styles.td}>
-                    <span style={styles.orderId}>{order.id}</span>
-                  </td>
+      <div style={styles.tableCard}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Commande</th>
+              <th style={styles.th}>Client</th>
+              <th style={styles.th}>Montant</th>
+              <th style={styles.th}>Date</th>
+              <th style={styles.th}>Statut</th>
+            </tr>
+          </thead>
+          <tbody>
+            {adminOrders.length === 0 ? (
+              <tr><td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: '#adb5bd' }}>Aucune vente</td></tr>
+            ) : (
+              adminOrders.map(order => (
+                <tr key={order.id}>
+                  <td style={styles.td}>#{order.id}</td>
                   <td style={styles.td}>{order.client}</td>
-                  <td style={styles.td}>{order.product}</td>
-                  <td style={styles.td}>
-                    <strong style={{ color: '#e07a5f' }}>{order.amount}</strong>
-                  </td>
+                  <td style={styles.td}>{order.amount.toLocaleString()} FCFA</td>
+                  <td style={styles.td}>{order.date}</td>
                   <td style={styles.td}>
                     <span style={{
                       ...styles.statusBadge,
-                      color: order.statusColor,
-                      backgroundColor: order.statusBg,
+                      backgroundColor: order.status === 'Livrée' ? '#e9f5ee' : '#fff3e0',
+                      color: order.status === 'Livrée' ? '#2d6a4f' : '#f5b041',
+                    }}>{order.status}</span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+
+  const renderProducts = () => (
+    <>
+      <div style={styles.pageHeader}>
+        <h2 style={styles.pageTitle}>Mes produits</h2>
+        <p style={styles.pageSubtitle}>{vendeurProducts.length} produit(s) en ligne</p>
+        <button style={styles.actionBtn} onClick={() => onNavigate && onNavigate('add-product')}>
+          <Plus size={16} /> Ajouter un produit
+        </button>
+      </div>
+      <div style={styles.tableCard}>
+        {vendeurProducts.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#adb5bd' }}>
+            <Package size={48} color="#adb5bd" />
+            <p>Vous n'avez pas encore de produits</p>
+            <button style={styles.actionBtn} onClick={() => onNavigate && onNavigate('add-product')}>
+              Ajouter votre premier produit
+            </button>
+          </div>
+        ) : (
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Produit</th>
+                <th style={styles.th}>Catégorie</th>
+                <th style={styles.th}>Prix</th>
+                <th style={styles.th}>Stock</th>
+                <th style={styles.th}>Statut</th>
+                <th style={styles.th}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vendeurProducts.map(p => (
+                <tr key={p.id}>
+                  <td style={styles.td}>{p.name}</td>
+                  <td style={styles.td}>{p.category || 'Non catégorisé'}</td>
+                  <td style={styles.td}>{p.price.toLocaleString()} FCFA</td>
+                  <td style={styles.td}>{p.stock}</td>
+                  <td style={styles.td}>
+                    <span style={{
+                      ...styles.statusBadge,
+                      backgroundColor: p.stock > 10 ? '#e9f5ee' : '#fdf1ed',
+                      color: p.stock > 10 ? '#2d6a4f' : '#e07a5f',
                     }}>
-                      {order.status}
+                      {p.stock > 10 ? '✅ Disponible' : '⚠️ Stock faible'}
                     </span>
+                  </td>
+                  <td style={styles.td}>
+                    <div style={styles.actionGroup}>
+                      <button style={styles.iconBtn} onClick={() => onNavigate && onNavigate('add-product')}>
+                        <Edit size={14} color="#2d6a4f" />
+                      </button>
+                      <button style={styles.iconBtn} onClick={() => {
+                        if (window.confirm(`Supprimer "${p.name}" ?`)) {
+                          alert('Produit supprimé (simulation)');
+                        }
+                      }}>
+                        <Trash2 size={14} color="#e07a5f" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+    </>
+  );
+
+  const renderStockAlerts = () => (
+    <>
+      <div style={styles.pageHeader}>
+        <h2 style={styles.pageTitle}>Alertes stock</h2>
+        <p style={styles.pageSubtitle}>{lowStockItems.length} produit(s) en stock critique</p>
+      </div>
+      <div style={styles.tableCard}>
+        {lowStockItems.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: '#2d6a4f' }}>
+            <CheckCircle size={48} color="#2d6a4f" />
+            <p>Tous vos produits ont un stock suffisant</p>
+          </div>
+        ) : (
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Produit</th>
+                <th style={styles.th}>Stock actuel</th>
+                <th style={styles.th}>Seuil critique</th>
+                <th style={styles.th}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lowStockItems.map(p => (
+                <tr key={p.id}>
+                  <td style={styles.td}>{p.name}</td>
+                  <td style={styles.td}>{p.stock}</td>
+                  <td style={styles.td}>10</td>
+                  <td style={styles.td}>
+                    <button style={styles.actionBtnSmall} onClick={() => onNavigate && onNavigate('add-product')}>
+                      Réapprovisionner
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </>
+  );
+
+  const renderOrders = () => (
+    <VendeurOrders
+      orders={adminOrders}
+      vendeurProducts={vendeurProducts}
+      onUpdateOrderStatus={onUpdateOrderStatus}
+    />
+  );
+
+  const renderSubscriptions = () => {
+    const currentPlan = plans.find(p => p.id === activePlan) || plans[0];
+    return (
+      <>
+        <div style={styles.pageHeader}>
+          <h2 style={styles.pageTitle}>Mon abonnement</h2>
+          <p style={styles.pageSubtitle}>Gérez votre plan d'abonnement</p>
         </div>
 
-        {/* ─── Quick Actions ─── */}
-        <div style={styles.quickActionsCard}>
-          <div style={styles.cardHeader}>
+        <div style={styles.currentPlanCard}>
+          <div style={styles.currentPlanHeader}>
+            <Award size={32} color="#2d6a4f" />
             <div>
-              <h3 style={styles.cardTitle}>Actions rapides</h3>
-              <p style={styles.cardSubtitle}>Raccourcis vendeur</p>
+              <h3 style={styles.currentPlanName}>{currentPlan.name}</h3>
+              <p style={styles.currentPlanPrice}>
+                {currentPlan.price === 0 ? 'Gratuit' : `${currentPlan.price.toLocaleString()} FCFA/mois`}
+              </p>
             </div>
           </div>
-          <div style={styles.actionsGrid}>
-            {quickActions.map((qa) => (
-              <button
-                key={qa.action}
-                style={{ ...styles.actionBtn, borderColor: qa.color + '30' }}
-                onClick={() => onNavigate ? onNavigate(qa.action) : showToast(`Navigation vers ${qa.label}`)}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = qa.color;
-                  e.currentTarget.style.color = '#fff';
-                  e.currentTarget.style.borderColor = qa.color;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#ffffff';
-                  e.currentTarget.style.color = '#212529';
-                  e.currentTarget.style.borderColor = qa.color + '30';
-                }}
-              >
-                <span style={styles.actionIcon}>{qa.icon}</span>
-                <span style={styles.actionLabel}>{qa.label}</span>
-              </button>
+          <ul style={styles.featureList}>
+            {currentPlan.features.map((f, i) => (
+              <li key={i} style={styles.featureItem}>✅ {f}</li>
             ))}
-          </div>
+          </ul>
+          <button style={styles.actionBtn} onClick={() => setShowPlanModal(true)}>
+            Changer d'abonnement
+          </button>
+        </div>
 
-          {/* Summary strip */}
-          <div style={styles.summaryStrip}>
-            <div style={styles.stripItem}>
-              <span style={styles.stripLabel}>Taux conversion</span>
-              <span style={styles.stripValue}>72.4%</span>
+        {showPlanModal && (
+          <div style={styles.modalOverlay} onClick={() => setShowPlanModal(false)}>
+            <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h3 style={styles.modalTitle}>Choisissez votre abonnement</h3>
+                <button style={styles.closeBtn} onClick={() => setShowPlanModal(false)}>✕</button>
+              </div>
+              <div style={styles.plansGrid}>
+                {plans.map(plan => {
+                  const isActive = activePlan === plan.id;
+                  return (
+                    <div key={plan.id} style={{
+                      ...styles.planCard,
+                      border: isActive ? '2px solid #2d6a4f' : '1px solid #e9ecef',
+                      backgroundColor: isActive ? '#e9f5ee' : '#ffffff',
+                    }}>
+                      <h4 style={styles.planName}>{plan.name}</h4>
+                      <p style={styles.planPrice}>
+                        {plan.price === 0 ? 'Gratuit' : `${plan.price.toLocaleString()} FCFA/mois`}
+                      </p>
+                      <ul style={styles.planFeatures}>
+                        {plan.features.map((f, i) => (
+                          <li key={i} style={styles.planFeature}>✅ {f}</li>
+                        ))}
+                      </ul>
+                      <button
+                        style={{
+                          ...styles.selectPlanBtn,
+                          backgroundColor: isActive ? '#e9ecef' : '#2d6a4f',
+                          color: isActive ? '#6c757d' : '#ffffff',
+                          cursor: isActive ? 'default' : 'pointer',
+                        }}
+                        onClick={() => {
+                          if (!isActive) handleSelectPlanClick(plan);
+                        }}
+                        disabled={isActive}
+                      >
+                        {isActive ? '✅ Actif' : 'Sélectionner'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <div style={styles.stripDivider} />
-            <div style={styles.stripItem}>
-              <span style={styles.stripLabel}>Panier moyen</span>
-              <span style={styles.stripValue}>14,350 FCFA</span>
+          </div>
+        )}
+
+        {showPaymentModal && selectedPlan && (
+          <div style={styles.modalOverlay} onClick={() => setShowPaymentModal(false)}>
+            <div style={{ ...styles.modal, maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h3 style={styles.modalTitle}>💳 Paiement</h3>
+                <button style={styles.closeBtn} onClick={() => setShowPaymentModal(false)}>✕</button>
+              </div>
+              <div style={styles.paymentInfo}>
+                <p style={styles.paymentPlan}>Plan : <strong>{selectedPlan.name}</strong></p>
+                <p style={styles.paymentAmount}>Montant : <strong>{selectedPlan.price.toLocaleString()} FCFA</strong></p>
+              </div>
+              <div style={styles.paymentMethods}>
+                <p style={styles.paymentLabel}>Choisissez votre mode de paiement :</p>
+                {paymentMethods.map(method => (
+                  <label key={method.id} style={{
+                    ...styles.paymentOption,
+                    backgroundColor: paymentMethod === method.id ? '#e9f5ee' : '#ffffff',
+                    borderColor: paymentMethod === method.id ? '#2d6a4f' : '#dee2e6',
+                  }}>
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value={method.id}
+                      checked={paymentMethod === method.id}
+                      onChange={() => setPaymentMethod(method.id)}
+                      style={{ display: 'none' }}
+                    />
+                    <span style={styles.paymentIcon}>{method.icon}</span>
+                    <span style={styles.paymentLabelText}>{method.label}</span>
+                  </label>
+                ))}
+              </div>
+              {paymentSuccess && (
+                <div style={styles.successBox}>
+                  <CheckCircle size={20} color="#2d6a4f" />
+                  <span>✅ Paiement effectué avec succès !</span>
+                </div>
+              )}
+              <div style={styles.paymentActions}>
+                <button style={styles.cancelBtn} onClick={() => setShowPaymentModal(false)}>Annuler</button>
+                <button
+                  style={{
+                    ...styles.payBtn,
+                    opacity: paymentLoading ? 0.7 : 1,
+                  }}
+                  onClick={handlePaymentSubmit}
+                  disabled={paymentLoading || paymentSuccess}
+                >
+                  {paymentLoading ? 'Traitement...' : paymentSuccess ? '✅ Payé' : `Payer ${selectedPlan.price.toLocaleString()} FCFA`}
+                </button>
+              </div>
             </div>
-            <div style={styles.stripDivider} />
-            <div style={styles.stripItem}>
-              <span style={styles.stripLabel}>Retours</span>
-              <span style={{ ...styles.stripValue, color: '#e07a5f' }}>2</span>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const renderCertification = () => {
+    const statusLabels = {
+      none: { label: 'Non certifié', color: '#adb5bd', bg: '#f8f9fa', icon: <Shield size={24} /> },
+      pending: { label: 'En attente d\'examen', color: '#f5b041', bg: '#fffbea', icon: <Clock size={24} /> },
+      approved: { label: '✅ Certifié', color: '#2d6a4f', bg: '#e9f5ee', icon: <CheckCircle size={24} /> },
+      rejected: { label: '❌ Rejeté', color: '#e07a5f', bg: '#fdf1ed', icon: <XCircle size={24} /> },
+    };
+    const status = statusLabels[certificationStatus] || statusLabels.none;
+
+    return (
+      <>
+        <div style={styles.pageHeader}>
+          <h2 style={styles.pageTitle}>Ma certification</h2>
+          <p style={styles.pageSubtitle}>Obtenez la certification pour gagner la confiance des acheteurs</p>
+        </div>
+
+        <div style={styles.certStatusCard}>
+          <div style={styles.certStatusIcon}>{status.icon}</div>
+          <div>
+            <h3 style={styles.certStatusTitle}>Statut : {status.label}</h3>
+            <p style={styles.certStatusDesc}>
+              {certificationStatus === 'none' && 'Soumettez vos documents pour obtenir la certification.'}
+              {certificationStatus === 'pending' && 'Vos documents sont en cours de vérification (24 à 48h).'}
+              {certificationStatus === 'approved' && 'Félicitations ! Votre compte est certifié.'}
+              {certificationStatus === 'rejected' && 'Votre demande a été rejetée. Contactez le support.'}
+            </p>
+          </div>
+        </div>
+
+        {certificationStatus === 'none' && (
+          <div style={styles.certForm}>
+            <h3 style={styles.certFormTitle}>📄 Soumettre votre demande</h3>
+            <p style={styles.certFormSub}>Fournissez les documents suivants :</p>
+            <div style={styles.certField}>
+              <label style={styles.certLabel}>🪪 Pièce d'identité (CNI ou Passeport) *</label>
+              <div style={styles.certUpload}>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    setCertificationData(prev => ({ ...prev, cniFile: file, cni: file?.name || null }));
+                  }}
+                  style={{ display: 'none' }}
+                  id="cni-upload"
+                />
+                <label htmlFor="cni-upload" style={styles.uploadLabel}>
+                  <Upload size={16} /> {certificationData.cni || 'Choisir un fichier'}
+                </label>
+              </div>
             </div>
+            <div style={styles.certField}>
+              <label style={styles.certLabel}>🎓 Diplôme de formation agricole *</label>
+              <p style={styles.certHint}>Diplôme d'ingénieur agronome, CES élevage, formation agropastorale...</p>
+              <div style={styles.certUpload}>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    setCertificationData(prev => ({ ...prev, diplomeFile: file, diplome: file?.name || null }));
+                  }}
+                  style={{ display: 'none' }}
+                  id="diplome-upload"
+                />
+                <label htmlFor="diplome-upload" style={styles.uploadLabel}>
+                  <Upload size={16} /> {certificationData.diplome || 'Choisir un fichier'}
+                </label>
+              </div>
+            </div>
+            <button style={styles.submitBtn} onClick={handleCertificationSubmit}>
+              <Send size={16} /> Envoyer la demande
+            </button>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const renderNotifications = () => (
+    <>
+      <div style={styles.pageHeader}>
+        <h2 style={styles.pageTitle}>Notifications</h2>
+        <p style={styles.pageSubtitle}>Restez informé de toute l'activité</p>
+      </div>
+      <div style={styles.tableCard}>
+        <p style={{ color: '#adb5bd', textAlign: 'center', padding: '20px' }}>Aucune notification récente</p>
+      </div>
+    </>
+  );
+
+  const renderProfile = () => (
+    <>
+      <div style={styles.pageHeader}>
+        <h2 style={styles.pageTitle}>Mon profil</h2>
+        <p style={styles.pageSubtitle}>Gérez vos informations personnelles</p>
+      </div>
+      <div style={styles.profileCard}>
+        <div style={styles.profilePhoto}>
+          {currentUser?.photo ? (
+            <img src={currentUser.photo} alt="Photo" style={styles.profileImg} />
+          ) : (
+            <div style={styles.profileImgPlaceholder}>
+              <User size={48} color="#adb5bd" />
+            </div>
+          )}
+        </div>
+        <div style={styles.profileInfo}>
+          <h3>{currentUser?.prenom} {currentUser?.nom}</h3>
+          <p>{currentUser?.email}</p>
+          <p>{currentUser?.telephone}</p>
+          <div style={styles.profileActions}>
+            <button style={styles.actionBtnSmall} onClick={() => onNavigate && onNavigate('edit-profile')}>
+              Modifier le profil
+            </button>
+            <button style={styles.actionBtnSmall} onClick={() => onNavigate && onNavigate('change-password')}>
+              Changer le mot de passe
+            </button>
           </div>
         </div>
       </div>
+    </>
+  );
+
+  const renderContent = () => {
+    switch (activeMenu) {
+      case 'dashboard': return renderDashboard();
+      case 'sales': return renderSalesHistory();
+      case 'products': return renderProducts();
+      case 'stock': return renderStockAlerts();
+      case 'orders': return renderOrders();
+      case 'subscriptions': return renderSubscriptions();
+      case 'certification': return renderCertification();
+      case 'notifications': return renderNotifications();
+      case 'profile': return renderProfile();
+      default: return renderDashboard();
+    }
+  };
+
+  return (
+    <div style={styles.wrapper}>
+      <aside style={{ ...styles.sidebar, width: sidebarOpen ? '250px' : '72px' }}>
+        <div style={styles.sidebarHeader}>
+          <button style={styles.toggleBtn} onClick={() => setSidebarOpen(!sidebarOpen)}>
+            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+          {sidebarOpen && <span style={styles.brand}>🌿 Mon espace</span>}
+        </div>
+        <nav style={styles.nav}>
+          {menuItems.map(item => (
+            <button
+              key={item.id}
+              style={{ ...styles.navItem, ...(activeMenu === item.id ? styles.navItemActive : {}) }}
+              onClick={() => setActiveMenu(item.id)}
+            >
+              {item.icon}
+              {sidebarOpen && <span>{item.label}</span>}
+            </button>
+          ))}
+        </nav>
+        <div style={styles.sidebarFooter}>
+          <button style={styles.navItem} onClick={() => onLogout && onLogout()}>
+            <LogOut size={18} />
+            {sidebarOpen && <span>Déconnexion</span>}
+          </button>
+        </div>
+      </aside>
+
+      <main style={{ ...styles.main, marginLeft: sidebarOpen ? '250px' : '72px' }}>
+        <div style={styles.content}>{renderContent()}</div>
+      </main>
     </div>
   );
 }
 
+// ============================================================
+// ==================== STYLES =================================
+// ============================================================
 const styles = {
-  container: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: '30px 20px 60px 20px',
-    width: '100%',
+  wrapper: { display: 'flex', minHeight: '100vh', backgroundColor: '#f4f6f8', fontFamily: "'Plus Jakarta Sans', sans-serif" },
+  sidebar: {
+    position: 'fixed', top: 0, left: 0, height: '100vh', backgroundColor: '#1b4d3e',
+    color: '#ffffff', padding: '16px 0', transition: 'width 0.3s ease', zIndex: 100,
+    overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: '4px 0 20px rgba(0,0,0,0.1)',
   },
-  toast: {
-    position: 'fixed',
-    bottom: '24px',
-    right: '24px',
-    backgroundColor: '#1b4d3e',
-    color: '#ffffff',
-    padding: '14px 20px',
-    borderRadius: '10px',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-    zIndex: 9999,
-    fontSize: '13px',
-    fontWeight: '700',
-    animation: 'slideInRight 0.3s ease-out forwards',
+  sidebarHeader: { display: 'flex', alignItems: 'center', gap: '12px', padding: '0 16px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', marginBottom: '16px' },
+  toggleBtn: { background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', padding: '4px' },
+  brand: { fontSize: '16px', fontWeight: '800', color: '#ffffff', whiteSpace: 'nowrap' },
+  nav: { flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', padding: '0 10px' },
+  navItem: {
+    display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px',
+    borderRadius: '10px', border: 'none', backgroundColor: 'transparent',
+    color: '#a3c2b8', fontSize: '14px', fontWeight: '600', cursor: 'pointer',
+    transition: 'all 0.2s ease', width: '100%', whiteSpace: 'nowrap',
   },
-  pageHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginBottom: '28px',
-    borderBottom: '1.5px solid #dee2e6',
-    paddingBottom: '20px',
-    flexWrap: 'wrap',
-    gap: '12px',
-  },
-  greeting: {
-    fontSize: '13px',
-    color: '#6c757d',
-    fontWeight: '600',
-    marginBottom: '4px',
-  },
-  pageTitle: {
-    fontSize: '26px',
-    fontWeight: '800',
-    color: '#212529',
-    letterSpacing: '-0.02em',
-    margin: 0,
-  },
-  pageSubtitle: {
-    fontSize: '12px',
-    color: '#adb5bd',
-    fontWeight: '600',
-    marginTop: '4px',
-  },
-  headerActions: {
-    display: 'flex',
-    gap: '10px',
-  },
-  exportBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '10px 18px',
-    borderRadius: '10px',
-    backgroundColor: '#ffffff',
-    border: '1.5px solid #dee2e6',
-    color: '#343a40',
-    fontSize: '13px',
-    fontWeight: '700',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-  },
-  // KPI Grid
-  kpiGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: '20px',
-    marginBottom: '28px',
-  },
-  kpiCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: '16px',
-    border: '1px solid #e9ecef',
-    padding: '22px 20px',
-    boxShadow: '0 4px 6px rgba(0,0,0,0.02)',
-    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-  },
-  kpiTop: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '14px',
-  },
-  kpiIconWrap: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '10px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  kpiIcon: {
-    fontSize: '18px',
-  },
-  kpiChange: {
-    fontSize: '11px',
-    fontWeight: '700',
-    padding: '3px 8px',
-    borderRadius: '20px',
-  },
-  kpiLabel: {
-    fontSize: '12px',
-    color: '#6c757d',
-    fontWeight: '600',
-    marginBottom: '4px',
-  },
-  kpiValue: {
-    fontSize: '22px',
-    fontWeight: '800',
-    color: '#212529',
-    letterSpacing: '-0.02em',
-  },
-  kpiUnit: {
-    fontSize: '12px',
-    fontWeight: '600',
-    color: '#adb5bd',
-  },
-  // Main Grid
-  mainGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1.6fr 1fr',
-    gap: '24px',
-    marginBottom: '24px',
-  },
-  chartCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: '16px',
-    border: '1px solid #e9ecef',
-    padding: '24px',
-    boxShadow: '0 4px 6px rgba(0,0,0,0.01)',
-  },
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '20px',
-  },
-  cardTitle: {
-    fontSize: '15px',
-    fontWeight: '800',
-    color: '#212529',
-    marginBottom: '2px',
-  },
-  cardSubtitle: {
-    fontSize: '12px',
-    color: '#adb5bd',
-    fontWeight: '500',
-  },
-  chartLegend: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
-  legendDot: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    backgroundColor: '#2d6a4f',
-    display: 'inline-block',
-  },
-  legendText: {
-    fontSize: '11px',
-    color: '#6c757d',
-    fontWeight: '600',
-  },
-  chartArea: {
-    display: 'flex',
-    alignItems: 'flex-end',
-    gap: '8px',
-    height: '150px',
-    borderBottom: '2px solid #f1f3f5',
-    paddingBottom: '6px',
-  },
-  barGroup: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: '6px',
-    cursor: 'pointer',
-    position: 'relative',
-  },
-  barTooltip: {
-    position: 'absolute',
-    top: '-36px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    backgroundColor: '#212529',
-    color: '#ffffff',
-    fontSize: '10px',
-    fontWeight: '700',
-    padding: '4px 8px',
-    borderRadius: '6px',
-    whiteSpace: 'nowrap',
-    zIndex: 10,
-  },
-  bar: {
-    width: '100%',
-    borderRadius: '6px 6px 0 0',
-    transition: 'all 0.2s ease',
-    transformOrigin: 'bottom',
-  },
-  barLabel: {
-    fontSize: '9px',
-    color: '#adb5bd',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  // Top Products
-  topProductsCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: '16px',
-    border: '1px solid #e9ecef',
-    padding: '24px',
-    boxShadow: '0 4px 6px rgba(0,0,0,0.01)',
-  },
-  productsList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '18px',
-  },
-  productItem: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: '12px',
-  },
-  productLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    flex: 1,
-    minWidth: 0,
-  },
-  productRank: {
-    fontSize: '11px',
-    fontWeight: '800',
-    color: '#adb5bd',
-    width: '20px',
-    flexShrink: 0,
-  },
-  productEmoji: {
-    fontSize: '20px',
-  },
-  productName: {
-    fontSize: '13px',
-    fontWeight: '700',
-    color: '#212529',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  productSold: {
-    fontSize: '11px',
-    color: '#adb5bd',
-    fontWeight: '500',
-  },
-  productRight: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    gap: '6px',
-    flexShrink: 0,
-  },
-  productRevenue: {
-    fontSize: '12px',
-    fontWeight: '700',
-    color: '#2d6a4f',
-    whiteSpace: 'nowrap',
-  },
-  progressBar: {
-    width: '80px',
-    height: '5px',
-    backgroundColor: '#e9ecef',
-    borderRadius: '4px',
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#2d6a4f',
-    borderRadius: '4px',
-    transition: 'width 0.4s ease',
-  },
-  // Bottom Grid
-  bottomGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1.6fr 1fr',
-    gap: '24px',
-  },
-  recentOrdersCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: '16px',
-    border: '1px solid #e9ecef',
-    padding: '24px',
-    boxShadow: '0 4px 6px rgba(0,0,0,0.01)',
-    overflowX: 'auto',
-  },
-  viewAllBtn: {
-    fontSize: '12px',
-    fontWeight: '700',
-    color: '#1b4d3e',
-    cursor: 'pointer',
-    background: 'none',
-    border: 'none',
-    padding: '4px 0',
-    textDecoration: 'underline',
-    textDecorationColor: 'transparent',
-    transition: 'all 0.2s',
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '13px',
-  },
-  th: {
-    textAlign: 'left',
-    padding: '10px 12px',
-    fontSize: '11px',
-    fontWeight: '700',
-    color: '#868e96',
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-    borderBottom: '1.5px solid #f1f3f5',
-    whiteSpace: 'nowrap',
-  },
-  tr: {
-    borderBottom: '1px solid #f8f9fa',
-  },
-  td: {
-    padding: '12px 12px',
-    verticalAlign: 'middle',
-    color: '#343a40',
-    fontWeight: '500',
-    whiteSpace: 'nowrap',
-  },
-  orderId: {
-    fontWeight: '700',
-    color: '#1b4d3e',
-    fontFamily: 'monospace',
-  },
-  statusBadge: {
-    display: 'inline-block',
-    padding: '3px 10px',
-    borderRadius: '20px',
-    fontSize: '11px',
-    fontWeight: '700',
-  },
-  // Quick Actions
-  quickActionsCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: '16px',
-    border: '1px solid #e9ecef',
-    padding: '24px',
-    boxShadow: '0 4px 6px rgba(0,0,0,0.01)',
-  },
-  actionsGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '12px',
-    marginBottom: '20px',
-  },
-  actionBtn: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-    padding: '16px 10px',
-    borderRadius: '12px',
-    backgroundColor: '#ffffff',
-    border: '1.5px solid',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    color: '#212529',
-    fontSize: '12px',
-    fontWeight: '600',
-  },
-  actionIcon: {
-    fontSize: '22px',
-  },
-  actionLabel: {
-    textAlign: 'center',
-    lineHeight: '1.2',
-    fontSize: '12px',
-  },
-  summaryStrip: {
-    display: 'flex',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '10px',
-    padding: '12px 16px',
-    border: '1px solid #e9ecef',
-  },
-  stripItem: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '2px',
-  },
-  stripLabel: {
-    fontSize: '10px',
-    color: '#868e96',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: '0.04em',
-  },
-  stripValue: {
-    fontSize: '15px',
-    fontWeight: '800',
-    color: '#212529',
-  },
-  stripDivider: {
-    width: '1px',
-    backgroundColor: '#dee2e6',
-    alignSelf: 'stretch',
-    margin: '0 10px',
-  },
+  navItemActive: { backgroundColor: 'rgba(255,255,255,0.15)', color: '#ffffff' },
+  sidebarFooter: { padding: '0 10px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '16px' },
+  main: { flex: 1, padding: '24px', transition: 'margin-left 0.3s ease', minHeight: '100vh' },
+  content: { maxWidth: '1200px', margin: '0 auto' },
+
+  pageHeader: { marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' },
+  pageTitle: { fontSize: '24px', fontWeight: '900', color: '#212529', margin: '0 0 4px 0' },
+  pageSubtitle: { fontSize: '14px', color: '#6c757d', margin: 0 },
+
+  alertBanner: { display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 20px', backgroundColor: '#fdf1ed', borderRadius: '14px', border: '1px solid #f5d4c8', marginBottom: '16px' },
+  alertLink: { marginLeft: 'auto', fontWeight: '700', color: '#e07a5f', cursor: 'pointer' },
+
+  kpiGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' },
+  kpiCard: { display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e9ecef' },
+  kpiIcon: { width: '44px', height: '44px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  kpiLabel: { fontSize: '12px', color: '#6c757d', fontWeight: '600', margin: 0, textTransform: 'uppercase' },
+  kpiValue: { fontSize: '20px', fontWeight: '800', color: '#212529', margin: 0 },
+
+  chartCard: { backgroundColor: '#ffffff', borderRadius: '16px', padding: '20px', border: '1px solid #e9ecef', marginBottom: '24px' },
+  chartTitle: { fontSize: '16px', fontWeight: '700', color: '#212529', margin: '0 0 16px 0' },
+  chartArea: { display: 'flex', alignItems: 'flex-end', gap: '8px', height: '120px', paddingBottom: '8px', borderBottom: '2px solid #f1f3f5' },
+  barGroup: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', height: '100%', justifyContent: 'flex-end' },
+  bar: { width: '100%', borderRadius: '6px 6px 0 0', backgroundColor: '#2d6a4f', minHeight: '4px' },
+  barLabel: { fontSize: '10px', color: '#adb5bd', fontWeight: '600' },
+
+  tableCard: { backgroundColor: '#ffffff', borderRadius: '16px', padding: '20px', border: '1px solid #e9ecef', overflowX: 'auto' },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: '14px' },
+  th: { textAlign: 'left', padding: '12px 8px', borderBottom: '2px solid #e9ecef', fontSize: '12px', fontWeight: '700', color: '#6c757d', textTransform: 'uppercase' },
+  td: { padding: '12px 8px', borderBottom: '1px solid #f8f9fa', color: '#495057', fontWeight: '500' },
+  statusBadge: { padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' },
+
+  orderRow: { display: 'flex', alignItems: 'center', gap: '16px', padding: '10px 0', borderBottom: '1px solid #f8f9fa' },
+  orderId: { fontWeight: '700', color: '#212529', minWidth: '80px' },
+  orderClient: { flex: 1, color: '#495057' },
+  orderAmount: { fontWeight: '700', color: '#e07a5f' },
+  orderStatus: { padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' },
+
+  actionBtn: { padding: '10px 20px', backgroundColor: '#2d6a4f', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
+  actionBtnSmall: { padding: '8px 16px', backgroundColor: '#2d6a4f', color: '#ffffff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' },
+  actionGroup: { display: 'flex', gap: '6px' },
+  iconBtn: { padding: '4px 8px', backgroundColor: '#f8f9fa', border: '1px solid #dee2e6', borderRadius: '6px', cursor: 'pointer' },
+
+  certStatusCard: { display: 'flex', alignItems: 'center', gap: '20px', backgroundColor: '#ffffff', padding: '24px', borderRadius: '16px', border: '1px solid #e9ecef', marginBottom: '24px' },
+  certStatusIcon: { width: '56px', height: '56px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8f9fa' },
+  certStatusTitle: { fontSize: '18px', fontWeight: '700', color: '#212529', margin: 0 },
+  certStatusDesc: { fontSize: '14px', color: '#6c757d', margin: 0 },
+  certForm: { backgroundColor: '#ffffff', padding: '24px', borderRadius: '16px', border: '1px solid #e9ecef' },
+  certFormTitle: { fontSize: '18px', fontWeight: '700', color: '#212529', margin: '0 0 4px 0' },
+  certFormSub: { fontSize: '14px', color: '#6c757d', margin: '0 0 20px 0' },
+  certField: { marginBottom: '16px' },
+  certLabel: { display: 'block', fontSize: '14px', fontWeight: '700', color: '#212529', marginBottom: '6px' },
+  certHint: { fontSize: '12px', color: '#6c757d', margin: '0 0 6px 0' },
+  certUpload: { display: 'flex', alignItems: 'center', gap: '10px' },
+  uploadLabel: { padding: '10px 16px', backgroundColor: '#f8f9fa', border: '1px dashed #dee2e6', borderRadius: '10px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', color: '#495057', display: 'flex', alignItems: 'center', gap: '8px' },
+  submitBtn: { padding: '12px 24px', backgroundColor: '#2d6a4f', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
+
+  currentPlanCard: { backgroundColor: '#ffffff', padding: '24px', borderRadius: '16px', border: '1px solid #e9ecef', marginBottom: '24px' },
+  currentPlanHeader: { display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' },
+  currentPlanName: { fontSize: '20px', fontWeight: '800', color: '#212529', margin: 0 },
+  currentPlanPrice: { fontSize: '16px', fontWeight: '600', color: '#2d6a4f', margin: 0 },
+  featureList: { listStyle: 'none', padding: 0, margin: '0 0 16px 0' },
+  featureItem: { fontSize: '14px', color: '#495057', padding: '4px 0' },
+
+  modalOverlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  modal: { backgroundColor: '#ffffff', borderRadius: '20px', padding: '28px', maxWidth: '600px', width: '100%', maxHeight: '90vh', overflowY: 'auto' },
+  modalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
+  modalTitle: { fontSize: '20px', fontWeight: '900', color: '#212529', margin: 0 },
+  closeBtn: { background: 'none', border: 'none', fontSize: '24px', color: '#6c757d', cursor: 'pointer' },
+  plansGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' },
+  planCard: { padding: '16px', borderRadius: '14px', border: '1px solid #e9ecef', textAlign: 'center' },
+  planName: { fontSize: '16px', fontWeight: '800', color: '#212529', margin: '0 0 4px 0' },
+  planPrice: { fontSize: '14px', fontWeight: '700', color: '#e07a5f', margin: '0 0 12px 0' },
+  planFeatures: { listStyle: 'none', padding: 0, margin: '0 0 12px 0', textAlign: 'left' },
+  planFeature: { fontSize: '13px', color: '#495057', padding: '3px 0' },
+  selectPlanBtn: { padding: '8px 16px', borderRadius: '10px', border: 'none', fontSize: '13px', fontWeight: '700', width: '100%' },
+
+  paymentInfo: { backgroundColor: '#f8f9fa', padding: '14px 16px', borderRadius: '12px', marginBottom: '16px' },
+  paymentPlan: { fontSize: '14px', color: '#495057', margin: '0 0 4px 0' },
+  paymentAmount: { fontSize: '16px', fontWeight: '800', color: '#e07a5f', margin: 0 },
+  paymentMethods: { marginBottom: '20px' },
+  paymentLabel: { fontSize: '14px', fontWeight: '700', color: '#212529', marginBottom: '10px' },
+  paymentOption: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px', border: '1.5px solid #dee2e6', marginBottom: '8px', cursor: 'pointer' },
+  paymentIcon: { fontSize: '20px' },
+  paymentLabelText: { fontSize: '14px', fontWeight: '600', color: '#212529' },
+  paymentActions: { display: 'flex', gap: '12px', marginTop: '16px' },
+  cancelBtn: { flex: 1, padding: '12px', backgroundColor: '#f1f3f5', color: '#495057', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: '700', cursor: 'pointer' },
+  payBtn: { flex: 2, padding: '12px', backgroundColor: '#2d6a4f', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '15px', fontWeight: '800', cursor: 'pointer' },
+  successBox: { display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', backgroundColor: '#e9f5ee', borderRadius: '12px', border: '1px solid #b7e4c7', marginBottom: '16px' },
+
+  profileCard: { display: 'flex', alignItems: 'center', gap: '24px', backgroundColor: '#ffffff', padding: '24px', borderRadius: '16px', border: '1px solid #e9ecef' },
+  profilePhoto: { flexShrink: 0 },
+  profileImg: { width: '100px', height: '100px', borderRadius: '50%', objectFit: 'cover', border: '4px solid #e9ecef' },
+  profileImgPlaceholder: { width: '100px', height: '100px', borderRadius: '50%', backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '4px solid #e9ecef' },
+  profileInfo: { flex: 1 },
+  profileActions: { display: 'flex', gap: '10px', marginTop: '12px' },
 };

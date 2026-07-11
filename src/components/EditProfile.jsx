@@ -1,166 +1,145 @@
-import React, { useState } from 'react';
-import { Camera, Save, X, User, MapPin, Mail, Phone, BookOpen, ArrowLeft } from 'lucide-react';
+// src/components/EditProfile.jsx
+import React, { useState, useRef } from 'react';
+import { Camera, Save, X, User, Mail, Phone, ArrowLeft } from 'lucide-react';
 
-export default function EditProfile({ onBack, onSave }) {
+export default function EditProfile({ onBack, onSave, currentUser }) {
   const [formData, setFormData] = useState({
-    nom: 'Dschang',
-    prenom: 'Ravie',
-    email: 'ravie@gmail.com',
-    telephone: '+237 6XX XXX XXX',
-    adresse: '123 Rue Test',
-    ville: 'Dschang',
-    codePostal: '',
-    pays: 'Cameroun',
-    biographie: ''
+    nom: currentUser?.nom || '',
+    prenom: currentUser?.prenom || '',
+    email: currentUser?.email || '',
+    telephone: currentUser?.telephone || '',
+    photo: currentUser?.photo || null,
   });
 
+  const [photoPreview, setPhotoPreview] = useState(currentUser?.photo || null);
   const [isHoveringPhoto, setIsHoveringPhoto] = useState(false);
+  const fileInputRef = useRef(null);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handlePhotoClick = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const base64 = ev.target.result;
+        setPhotoPreview(base64);
+        setFormData(prev => ({ ...prev, photo: base64 }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (onSave) onSave(formData);
-    else alert('Profil mis à jour !');
   };
 
   return (
-    <div style={styles.pageWrapper} className="fade-in">
-      {/* Top Header */}
-      <div style={styles.header}>
-        <div style={styles.headerInner}>
-          <div style={styles.headerLeft}>
-            <button style={styles.backBtn} onClick={onBack}>
-              <ArrowLeft size={20} />
-            </button>
-            <h1 style={styles.pageTitle}>Modifier profil</h1>
+    <div style={styles.wrapper}>
+      <div style={styles.card}>
+        {/* Bouton Retour */}
+        <button style={styles.backBtn} onClick={onBack}>
+          <ArrowLeft size={20} /> Retour
+        </button>
+
+        {/* Photo de profil centrée */}
+        <div style={styles.photoContainer}>
+          <div
+            style={{
+              ...styles.photoWrapper,
+              borderColor: isHoveringPhoto ? '#2d6a4f' : '#e9ecef',
+            }}
+            onMouseEnter={() => setIsHoveringPhoto(true)}
+            onMouseLeave={() => setIsHoveringPhoto(false)}
+            onClick={handlePhotoClick}
+          >
+            {photoPreview ? (
+              <img src={photoPreview} alt="Photo de profil" style={styles.photo} />
+            ) : (
+              <div style={styles.photoPlaceholder}>
+                <Camera size={32} color={isHoveringPhoto ? '#2d6a4f' : '#adb5bd'} />
+                <span style={styles.photoPlaceholderText}>Ajouter une photo</span>
+              </div>
+            )}
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              accept="image/jpeg,image/png,image/gif"
+              onChange={handleFileChange}
+            />
           </div>
-          <p style={styles.headerSubtitle}>Mettez à jour vos informations personnelles et vos coordonnées.</p>
         </div>
-      </div>
 
-      <div style={styles.container}>
-        <form style={styles.formCard} onSubmit={handleSubmit}>
-          
-          <div style={styles.grid}>
-            {/* Left Column - Photo Upload */}
-            <div style={styles.photoColumn}>
-              <div 
-                style={{
-                  ...styles.photoUploadArea,
-                  borderColor: isHoveringPhoto ? '#2d6a4f' : '#ced4da',
-                  backgroundColor: isHoveringPhoto ? '#f8fffb' : '#f8f9fa'
-                }}
-                onMouseEnter={() => setIsHoveringPhoto(true)}
-                onMouseLeave={() => setIsHoveringPhoto(false)}
-              >
-                <div style={styles.photoIconWrap}>
-                  <Camera size={32} color={isHoveringPhoto ? '#2d6a4f' : '#adb5bd'} />
-                </div>
-                <span style={{
-                  ...styles.photoText,
-                  color: isHoveringPhoto ? '#2d6a4f' : '#6c757d'
-                }}>
-                  Clic pour charger une photo
-                </span>
-                <span style={styles.photoSubText}>JPG, PNG max 5MB</span>
-              </div>
-            </div>
+        <h1 style={styles.title}>Modifier mon profil</h1>
 
-            {/* Right Column - Form Fields */}
-            <div style={styles.formColumn}>
-              <h3 style={styles.sectionTitle}>
-                <User size={18} />
-                Informations personnelles
-              </h3>
-              
-              <div style={styles.inputGrid}>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Nom</label>
-                  <input type="text" name="nom" value={formData.nom} onChange={handleChange} style={styles.input} />
-                </div>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Prénom</label>
-                  <input type="text" name="prenom" value={formData.prenom} onChange={handleChange} style={styles.input} />
-                </div>
-              </div>
+        <form style={styles.form} onSubmit={handleSubmit}>
+          <div style={styles.field}>
+            <label style={styles.label}>Nom</label>
+            <input
+              type="text"
+              name="nom"
+              value={formData.nom}
+              onChange={handleChange}
+              style={styles.input}
+              placeholder="Votre nom"
+            />
+          </div>
 
-              <div style={styles.inputGrid}>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>
-                    <Mail size={14} /> Email
-                  </label>
-                  <input type="email" name="email" value={formData.email} onChange={handleChange} style={styles.input} />
-                </div>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>
-                    <Phone size={14} /> Téléphone
-                  </label>
-                  <input type="tel" name="telephone" value={formData.telephone} onChange={handleChange} style={styles.input} />
-                </div>
-              </div>
+          <div style={styles.field}>
+            <label style={styles.label}>Prénom</label>
+            <input
+              type="text"
+              name="prenom"
+              value={formData.prenom}
+              onChange={handleChange}
+              style={styles.input}
+              placeholder="Votre prénom"
+            />
+          </div>
 
-              <div style={styles.divider} />
+          <div style={styles.field}>
+            <label style={styles.label}>
+              <Mail size={14} /> Email
+            </label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              style={styles.input}
+              placeholder="Votre email"
+            />
+          </div>
 
-              <h3 style={styles.sectionTitle}>
-                <MapPin size={18} />
-                Coordonnées de facturation
-              </h3>
+          <div style={styles.field}>
+            <label style={styles.label}>
+              <Phone size={14} /> Téléphone
+            </label>
+            <input
+              type="tel"
+              name="telephone"
+              value={formData.telephone}
+              onChange={handleChange}
+              style={styles.input}
+              placeholder="Votre téléphone"
+            />
+          </div>
 
-              <div style={styles.inputGrid}>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Adresse</label>
-                  <input type="text" name="adresse" value={formData.adresse} onChange={handleChange} style={styles.input} />
-                </div>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Ville</label>
-                  <input type="text" name="ville" value={formData.ville} onChange={handleChange} style={styles.input} />
-                </div>
-              </div>
-
-              <div style={styles.inputGrid}>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Code postal</label>
-                  <input type="text" name="codePostal" value={formData.codePostal} onChange={handleChange} style={styles.input} placeholder="Ex: 00000" />
-                </div>
-                <div style={styles.inputGroup}>
-                  <label style={styles.label}>Pays</label>
-                  <input type="text" name="pays" value={formData.pays} onChange={handleChange} style={styles.input} />
-                </div>
-              </div>
-
-              <div style={styles.divider} />
-
-              <h3 style={styles.sectionTitle}>
-                <BookOpen size={18} />
-                Biographie
-              </h3>
-
-              <div style={styles.inputGroup}>
-                <textarea 
-                  name="biographie" 
-                  value={formData.biographie} 
-                  onChange={handleChange} 
-                  style={styles.textarea} 
-                  placeholder="Parlez de vous, de vos préférences alimentaires..."
-                />
-              </div>
-
-              {/* Action Buttons */}
-              <div style={styles.actionRow}>
-                <button type="button" style={styles.cancelBtn} onClick={onBack}>
-                  <X size={18} />
-                  Annuler
-                </button>
-                <button type="submit" style={styles.saveBtn}>
-                  <Save size={18} />
-                  Enregistrer
-                </button>
-              </div>
-
-            </div>
+          <div style={styles.actionRow}>
+            <button type="button" style={styles.cancelBtn} onClick={onBack}>
+              <X size={18} /> Annuler
+            </button>
+            <button type="submit" style={styles.saveBtn}>
+              <Save size={18} /> Enregistrer
+            </button>
           </div>
         </form>
       </div>
@@ -169,207 +148,152 @@ export default function EditProfile({ onBack, onSave }) {
 }
 
 const styles = {
-  pageWrapper: {
-    backgroundColor: '#f8f9fa',
+  wrapper: {
     minHeight: '100vh',
-    width: '100%',
+    backgroundColor: '#f0f7f4',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '40px 24px',
     fontFamily: "'Plus Jakarta Sans', sans-serif",
   },
-  header: {
+  card: {
     backgroundColor: '#ffffff',
-    borderBottom: '1px solid #e9ecef',
-    padding: '32px 0',
-  },
-  headerInner: {
-    maxWidth: '1000px',
-    margin: '0 auto',
-    padding: '0 24px',
-  },
-  headerLeft: {
+    borderRadius: '28px',
+    padding: '40px',
+    width: '100%',
+    maxWidth: '440px',
+    boxShadow: '0 24px 64px rgba(0,0,0,0.08)',
+    border: '1px solid #e9ecef',
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: '16px',
-    marginBottom: '8px',
   },
   backBtn: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '12px',
-    backgroundColor: '#f1f3f5',
-    color: '#212529',
-    border: 'none',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s ease',
-  },
-  pageTitle: {
-    fontSize: '28px',
-    fontWeight: '800',
-    color: '#212529',
-    margin: 0,
-    letterSpacing: '-0.02em',
-  },
-  headerSubtitle: {
-    fontSize: '15px',
-    color: '#6c757d',
-    margin: '0 0 0 56px',
-  },
-  container: {
-    maxWidth: '1000px',
-    margin: '40px auto 60px',
-    padding: '0 24px',
-  },
-  formCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: '24px',
-    padding: '40px',
-    boxShadow: '0 12px 36px rgba(0,0,0,0.03)',
-    border: '1px solid #e9ecef',
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: '280px 1fr',
-    gap: '48px',
-    alignItems: 'start',
-  },
-  photoColumn: {
-    display: 'flex',
-    flexDirection: 'column',
-    position: 'sticky',
-    top: '40px',
-  },
-  photoUploadArea: {
-    width: '100%',
-    aspectRatio: '1 / 1',
-    borderRadius: '24px',
-    border: '2px dashed #ced4da',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '12px',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-  },
-  photoIconWrap: {
-    width: '64px',
-    height: '64px',
-    borderRadius: '50%',
-    backgroundColor: '#ffffff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    boxShadow: '0 8px 16px rgba(0,0,0,0.05)',
-  },
-  photoText: {
-    fontSize: '14px',
-    fontWeight: '700',
-  },
-  photoSubText: {
-    fontSize: '12px',
-    color: '#adb5bd',
-  },
-  formColumn: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
-  },
-  sectionTitle: {
-    fontSize: '16px',
-    fontWeight: '800',
-    color: '#212529',
-    margin: '0 0 8px 0',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  inputGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '20px',
-  },
-  inputGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-  },
-  label: {
-    fontSize: '13px',
-    fontWeight: '700',
-    color: '#495057',
+    alignSelf: 'flex-start',
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
+    background: 'none',
+    border: 'none',
+    color: '#6c757d',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    marginBottom: '16px',
+  },
+  photoContainer: {
+    marginBottom: '20px',
+  },
+  photoWrapper: {
+    width: '120px',
+    height: '120px',
+    borderRadius: '50%',
+    overflow: 'hidden',
+    cursor: 'pointer',
+    border: '3px solid #e9ecef',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
+    backgroundColor: '#f8f9fa',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'border-color 0.2s ease',
+  },
+  photo: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  photoPlaceholder: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    color: '#adb5bd',
+    width: '100%',
+    height: '100%',
+  },
+  photoPlaceholderText: {
+    fontSize: '11px',
+    fontWeight: '600',
+  },
+  title: {
+    fontSize: '22px',
+    fontWeight: '900',
+    color: '#212529',
+    margin: '0 0 24px 0',
+    textAlign: 'center',
+    letterSpacing: '-0.02em',
+  },
+  form: {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '18px',
+  },
+  field: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+  label: {
+    fontSize: '14px',
+    fontWeight: '700',
+    color: '#212529',
   },
   input: {
     width: '100%',
     padding: '14px 16px',
     borderRadius: '12px',
-    border: '1px solid #dee2e6',
+    border: '1.5px solid #dee2e6',
     backgroundColor: '#f8f9fa',
     fontSize: '15px',
     color: '#212529',
-    transition: 'all 0.2s ease',
     outline: 'none',
-  },
-  divider: {
-    height: '1px',
-    backgroundColor: '#e9ecef',
-    margin: '16px 0',
-  },
-  textarea: {
-    width: '100%',
-    padding: '16px',
-    borderRadius: '12px',
-    border: '1px solid #dee2e6',
-    backgroundColor: '#f8f9fa',
-    fontSize: '15px',
-    color: '#212529',
-    minHeight: '120px',
-    resize: 'vertical',
-    transition: 'all 0.2s ease',
-    outline: 'none',
-    fontFamily: 'inherit',
+    transition: 'border-color 0.2s ease',
+    boxSizing: 'border-box',
+    ':focus': {
+      borderColor: '#2d6a4f',
+      boxShadow: '0 0 0 3px rgba(45,106,79,0.08)',
+    },
   },
   actionRow: {
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: '16px',
-    marginTop: '32px',
-    paddingTop: '24px',
-    borderTop: '1px solid #e9ecef',
+    gap: '12px',
+    marginTop: '8px',
   },
   cancelBtn: {
-    padding: '14px 28px',
+    flex: 1,
+    padding: '14px',
     backgroundColor: '#ffffff',
     color: '#495057',
     border: '1px solid #dee2e6',
-    borderRadius: '12px',
+    borderRadius: '14px',
     fontSize: '15px',
     fontWeight: '700',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: '8px',
     transition: 'all 0.2s ease',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
   },
   saveBtn: {
-    padding: '14px 32px',
-    backgroundColor: '#1b4d3e',
+    flex: 1,
+    padding: '14px',
+    backgroundColor: '#2d6a4f',
     color: '#ffffff',
     border: 'none',
-    borderRadius: '12px',
+    borderRadius: '14px',
     fontSize: '15px',
     fontWeight: '800',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: '8px',
     transition: 'all 0.2s ease',
-    boxShadow: '0 8px 24px rgba(27, 77, 62, 0.25)',
-  }
+    boxShadow: '0 8px 24px rgba(45,106,79,0.25)',
+  },
 };

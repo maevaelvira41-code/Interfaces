@@ -1,151 +1,259 @@
+// src/components/ShoppingCart.jsx
 import React, { useState } from 'react';
-import { Trash2, ArrowRight, ArrowLeft, ShoppingBag, Tag } from 'lucide-react';
+import { ShoppingBag, Trash2, Plus, Minus, ArrowLeft, CreditCard, Truck, Smartphone, CheckCircle, AlertCircle } from 'lucide-react';
 
-export default function ShoppingCart({ onCheckout, onContinueShopping, cartItems = [], onRemoveItem }) {
+const paymentMethods = [
+  { id: 'orange-money', label: 'Orange Money', icon: '📱', placeholder: 'Numéro Orange Money (ex: 6X XX XX XX)' },
+  { id: 'mtn-money', label: 'MTN Mobile Money', icon: '📱', placeholder: 'Numéro MTN Mobile Money (ex: 6X XX XX XX)' },
+  { id: 'carte', label: 'Carte bancaire (Visa/Mastercard)', icon: '💳', placeholder: 'Numéro de carte (ex: 4111 1111 1111 1111)' },
+];
 
-  const [promoCode, setPromoCode] = useState('');
-  const [discount, setDiscount] = useState(0);
+export default function ShoppingCart({
+  cartItems,
+  onRemoveItem,
+  onUpdateQuantity,
+  onCheckout,
+  onContinueShopping,
+}) {
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [paymentData, setPaymentData] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
 
-  // Si des articles sont passés depuis App.jsx on les utilise, sinon liste vide
-  const [items, setItems] = useState(
-    cartItems.length > 0 ? cartItems : []
-  );
+  // Calcul des totaux
+  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const shipping = cartItems.length > 0 ? (subtotal > 50000 ? 0 : 2000) : 0;
+  const total = subtotal + shipping;
 
-  const subtotal = items.reduce((acc, item) => acc + item.total, 0);
-  const shipping = items.length > 0 ? 5000 : 0;
-  const total = subtotal + shipping - discount;
-
-  const handleRemove = (id) => {
-    setItems(items.filter(item => item.id !== id));
-    if (onRemoveItem) onRemoveItem(id);
-  };
-
-  const applyPromo = () => {
-    if (promoCode.toUpperCase() === 'AGRO2026') {
-      setDiscount(5000);
-      alert('Code promo appliqué ! -5000 FCFA 🎉');
+  const handleQuantityChange = (id, newQty) => {
+    if (newQty < 1) {
+      onRemoveItem(id);
     } else {
-      alert('Code promo invalide. Essayez AGRO2026');
+      onUpdateQuantity(id, newQty);
     }
   };
 
-  return (
-    <div style={styles.container} className="fade-in">
-      <div style={styles.header}>
-        <div style={styles.headerContent}>
-          <div style={styles.iconWrap}>
-            <ShoppingBag size={28} color="#fff" />
-          </div>
+  const handlePaymentSubmit = () => {
+    // Validation
+    if (!paymentMethod) {
+      setPaymentError('Veuillez choisir un mode de paiement');
+      return;
+    }
+    if (!paymentData.trim()) {
+      setPaymentError('Veuillez saisir vos coordonnées de paiement');
+      return;
+    }
+
+    // Validation simple du numéro de téléphone (Orange/MTN) ou carte
+    if (paymentMethod === 'orange-money' || paymentMethod === 'mtn-money') {
+      const phoneRegex = /^[6][0-9]{8}$/; // 6X XX XX XX
+      if (!phoneRegex.test(paymentData.replace(/\s/g, ''))) {
+        setPaymentError('Numéro de téléphone invalide (ex: 6X XX XX XX)');
+        return;
+      }
+    }
+
+    if (paymentMethod === 'carte') {
+      const cardRegex = /^[0-9]{16}$/;
+      if (!cardRegex.test(paymentData.replace(/\s/g, ''))) {
+        setPaymentError('Numéro de carte invalide (16 chiffres)');
+        return;
+      }
+    }
+
+    setPaymentError('');
+    setIsProcessing(true);
+
+    // Simulation de paiement
+    setTimeout(() => {
+      setIsProcessing(false);
+      setPaymentSuccess(true);
+      // Appeler onCheckout pour valider la commande après 2 secondes
+      setTimeout(() => {
+        onCheckout();
+      }, 1500);
+    }, 2000);
+  };
+
+  if (cartItems.length === 0) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.header}>
+          <button style={styles.backBtn} onClick={onContinueShopping}>
+            <ArrowLeft size={20} /> Continuer vos achats
+          </button>
           <h1 style={styles.title}>Mon Panier</h1>
-          <span style={styles.badge}>{items.length} articles</span>
+          <p style={styles.subtitle}>0 article</p>
         </div>
-        <p style={styles.subtitle}>Finalisez vos achats en toute sécurité avec nos producteurs partenaires.</p>
+
+        <div style={styles.emptyState}>
+          <ShoppingBag size={64} color="#adb5bd" />
+          <h3 style={styles.emptyTitle}>Votre panier est vide</h3>
+          <p style={styles.emptyDesc}>Découvrez nos produits frais et ajoutez-les à votre panier.</p>
+          <button style={styles.emptyBtn} onClick={onContinueShopping}>
+            Découvrir les produits
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={styles.container}>
+      <div style={styles.header}>
+        <button style={styles.backBtn} onClick={onContinueShopping}>
+          <ArrowLeft size={20} /> Continuer vos achats
+        </button>
+        <h1 style={styles.title}>Mon Panier</h1>
+        <p style={styles.subtitle}>{cartItems.length} article{cartItems.length > 1 ? 's' : ''}</p>
       </div>
 
       <div style={styles.grid}>
-        {/* Colonne gauche */}
-        <div style={styles.leftCol}>
-          <div style={styles.listHeader}>
-            <span style={styles.headerTitle}>Produits</span>
-          </div>
-
-          <div style={styles.itemsList}>
-            {items.length > 0 ? items.map((item) => (
-              <div key={item.id} style={styles.itemCard}>
-                <div style={styles.itemLeft}>
-                  {/* Image réelle ou emoji fallback */}
-                  <div style={styles.itemImageWrapper}>
-                    {item.image ? (
-                      <img src={item.image} alt={item.name} style={styles.itemImg} />
-                    ) : (
-                      <span style={styles.itemEmoji}>{item.img || '🛒'}</span>
-                    )}
-                  </div>
-                  <div style={styles.itemInfo}>
-                    <h3 style={styles.itemName}>{item.name}</h3>
-                    <p style={styles.itemFarm}>{item.farm}</p>
-                  </div>
-                </div>
-
-                <div style={styles.itemMiddle}>
-                  <span style={styles.itemWeight}>{item.quantity || 1} kg</span>
-                  <span style={styles.itemUnitPrice}>{item.price.toLocaleString('fr-FR')} FCFA / kg</span>
-                </div>
-
-                <div style={styles.itemRight}>
-                  <span style={styles.itemTotalPrice}>{item.total.toLocaleString('fr-FR')} FCFA</span>
-                  <button style={styles.removeBtn} onClick={() => handleRemove(item.id)}>
-                    <Trash2 size={18} />
+        {/* Colonne gauche : produits */}
+        <div style={styles.productsSection}>
+          {cartItems.map((item) => (
+            <div key={item.id} style={styles.productCard}>
+              <div style={styles.productImage}>
+                <img src={item.image} alt={item.name} style={styles.image} />
+              </div>
+              <div style={styles.productInfo}>
+                <h4 style={styles.productName}>{item.name}</h4>
+                <p style={styles.productFarm}>{item.farm || 'Producteur local'}</p>
+                <p style={styles.productPrice}>{item.price.toLocaleString()} FCFA</p>
+                <div style={styles.quantityControl}>
+                  <button
+                    style={styles.qtyBtn}
+                    onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
+                  >
+                    <Minus size={14} />
+                  </button>
+                  <span style={styles.qtyValue}>{item.quantity}</span>
+                  <button
+                    style={styles.qtyBtn}
+                    onClick={() => handleQuantityChange(item.id, item.quantity + 1)}
+                  >
+                    <Plus size={14} />
                   </button>
                 </div>
               </div>
-            )) : (
-              <div style={styles.emptyState}>
-                <ShoppingBag size={48} color="#adb5bd" style={{ marginBottom: '16px' }} />
-                <h3 style={styles.emptyTitle}>Votre panier est vide</h3>
-                <p style={styles.emptyText}>Découvrez nos produits frais et ajoutez-les à votre panier.</p>
-                <button style={styles.continueBtn} onClick={onContinueShopping}>
-                  <ArrowLeft size={18} /> Découvrir les produits
+              <div style={styles.productActions}>
+                <div style={styles.productSubtotal}>
+                  {(item.price * item.quantity).toLocaleString()} FCFA
+                </div>
+                <button
+                  style={styles.removeBtn}
+                  onClick={() => onRemoveItem(item.id)}
+                >
+                  <Trash2 size={16} color="#e07a5f" />
                 </button>
               </div>
-            )}
-          </div>
+            </div>
+          ))}
         </div>
 
-        {/* Colonne droite - Résumé */}
-        <div style={styles.rightCol}>
-          <div style={styles.summaryCard}>
-            <h2 style={styles.summaryTitle}>Résumé de la commande</h2>
-            <div style={styles.summaryBody}>
-              <div style={styles.summaryRow}>
-                <span style={styles.summaryLabel}>Sous-total</span>
-                <span style={styles.summaryValue}>{subtotal.toLocaleString('fr-FR')} FCFA</span>
-              </div>
-              <div style={styles.summaryRow}>
-                <span style={styles.summaryLabel}>Frais de livraison</span>
-                <span style={styles.summaryValue}>{shipping.toLocaleString('fr-FR')} FCFA</span>
-              </div>
-              {discount > 0 && (
-                <div style={{...styles.summaryRow, color: '#2d6a4f'}}>
-                  <span style={styles.summaryLabel}>Réduction (Promo)</span>
-                  <span style={styles.summaryValue}>-{discount.toLocaleString('fr-FR')} FCFA</span>
-                </div>
-              )}
-              <div style={styles.divider} />
-              <div style={styles.promoSection}>
-                <label style={styles.promoLabel}>Code promo</label>
-                <div style={styles.promoInputGroup}>
-                  <div style={styles.promoIcon}><Tag size={16} color="#6c757d" /></div>
-                  <input
-                    type="text"
-                    placeholder="Entrer le code (ex: AGRO2026)"
-                    style={styles.promoInput}
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
-                  />
-                  <button style={styles.promoBtn} onClick={applyPromo}>Appliquer</button>
-                </div>
-              </div>
-              <div style={styles.divider} />
-              <div style={styles.totalRow}>
-                <span style={styles.totalLabel}>Total à payer</span>
-                <span style={styles.totalValue}>{total.toLocaleString('fr-FR')} FCFA</span>
-              </div>
-              <button
-                style={{...styles.checkoutBtn, opacity: items.length === 0 ? 0.5 : 1}}
-                onClick={onCheckout}
-                disabled={items.length === 0}
-              >
-                Procéder au paiement <ArrowRight size={18} />
-              </button>
-              <button style={styles.continueShoppingBtn} onClick={onContinueShopping}>
-                <ArrowLeft size={16} /> Continuer vos achats
-              </button>
-            </div>
+        {/* Colonne droite : résumé + paiement */}
+        <div style={styles.summarySection}>
+          <h3 style={styles.summaryTitle}>Résumé de la commande</h3>
+
+          <div style={styles.summaryRow}>
+            <span>Sous-total</span>
+            <span>{subtotal.toLocaleString()} FCFA</span>
           </div>
-          <div style={styles.secureCard}>
-            <div style={styles.secureItem}><span>🔒</span> Paiement 100% sécurisé</div>
-            <div style={styles.secureItem}><span>🚚</span> Livraison suivie garantie</div>
+          <div style={styles.summaryRow}>
+            <span>Frais de livraison</span>
+            <span>{shipping === 0 ? 'Offerts' : `${shipping.toLocaleString()} FCFA`}</span>
+          </div>
+          <div style={styles.divider} />
+
+          {/* Total */}
+          <div style={styles.totalRow}>
+            <span style={styles.totalLabel}>Total à payer</span>
+            <span style={styles.totalValue}>{total.toLocaleString()} FCFA</span>
+          </div>
+
+          <div style={styles.divider} />
+
+          {/* CHOIX DU MODE DE PAIEMENT */}
+          <div style={styles.paymentSection}>
+            <h4 style={styles.paymentTitle}>Mode de paiement</h4>
+            <div style={styles.paymentOptions}>
+              {paymentMethods.map((method) => (
+                <label
+                  key={method.id}
+                  style={{
+                    ...styles.paymentOption,
+                    borderColor: paymentMethod === method.id ? '#2d6a4f' : '#dee2e6',
+                    backgroundColor: paymentMethod === method.id ? '#e9f5ee' : '#f8f9fa',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value={method.id}
+                    checked={paymentMethod === method.id}
+                    onChange={() => {
+                      setPaymentMethod(method.id);
+                      setPaymentError('');
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                  <span style={styles.paymentIcon}>{method.icon}</span>
+                  <span style={styles.paymentLabel}>{method.label}</span>
+                </label>
+              ))}
+            </div>
+
+            {paymentMethod && (
+              <div style={styles.paymentForm}>
+                <label style={styles.paymentInputLabel}>
+                  {paymentMethods.find(m => m.id === paymentMethod)?.placeholder}
+                </label>
+                <input
+                  type="text"
+                  placeholder={paymentMethods.find(m => m.id === paymentMethod)?.placeholder}
+                  value={paymentData}
+                  onChange={(e) => {
+                    setPaymentData(e.target.value);
+                    setPaymentError('');
+                  }}
+                  style={styles.paymentInput}
+                />
+              </div>
+            )}
+
+            {paymentError && (
+              <div style={styles.errorBox}>
+                <AlertCircle size={16} color="#e07a5f" />
+                <span style={styles.errorText}>{paymentError}</span>
+              </div>
+            )}
+
+            {paymentSuccess && (
+              <div style={styles.successBox}>
+                <CheckCircle size={20} color="#2d6a4f" />
+                <span style={styles.successText}>✅ Paiement validé ! Redirection...</span>
+              </div>
+            )}
+
+            <button
+              style={{
+                ...styles.checkoutBtn,
+                opacity: isProcessing ? 0.7 : 1,
+                backgroundColor: paymentSuccess ? '#2d6a4f' : '#2d6a4f',
+              }}
+              onClick={handlePaymentSubmit}
+              disabled={isProcessing || paymentSuccess}
+            >
+              {isProcessing ? '⏳ Traitement...' : paymentSuccess ? '✅ Payé' : `Payer ${total.toLocaleString()} FCFA`}
+              {!isProcessing && !paymentSuccess && <CreditCard size={16} />}
+            </button>
+          </div>
+
+          {/* Sécurité */}
+          <div style={styles.securityBadges}>
+            <span style={styles.badge}>🔒 Paiement sécurisé</span>
+            <span style={styles.badge}>🚚 Livraison suivie</span>
           </div>
         </div>
       </div>
@@ -154,55 +262,318 @@ export default function ShoppingCart({ onCheckout, onContinueShopping, cartItems
 }
 
 const styles = {
-  container: { padding: '40px', maxWidth: '1400px', margin: '0 auto', width: '100%', fontFamily: "'Plus Jakarta Sans', sans-serif" },
-  header: { marginBottom: '40px', background: 'linear-gradient(135deg, #1b4d3e 0%, #2d6a4f 100%)', borderRadius: '24px', padding: '32px 40px', color: 'white', boxShadow: '0 20px 40px rgba(27,77,62,0.15)' },
-  headerContent: { display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' },
-  iconWrap: { width: '56px', height: '56px', backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(255,255,255,0.3)' },
-  title: { fontSize: '32px', fontWeight: '800', margin: 0 },
-  badge: { backgroundColor: '#e07a5f', padding: '6px 12px', borderRadius: '20px', fontSize: '14px', fontWeight: '700' },
-  subtitle: { fontSize: '16px', color: 'rgba(255,255,255,0.8)', margin: 0 },
-  grid: { display: 'grid', gridTemplateColumns: '1fr 400px', gap: '32px', alignItems: 'start' },
-  leftCol: { display: 'flex', flexDirection: 'column', gap: '24px' },
-  listHeader: { display: 'flex', alignItems: 'center', paddingBottom: '16px', borderBottom: '2px solid #e9ecef' },
-  headerTitle: { fontSize: '18px', fontWeight: '700', color: '#212529' },
-  itemsList: { display: 'flex', flexDirection: 'column', gap: '16px' },
-  itemCard: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#ffffff', borderRadius: '20px', padding: '20px 24px', border: '1px solid #e9ecef', boxShadow: '0 8px 24px rgba(0,0,0,0.02)' },
-  itemLeft: { display: 'flex', alignItems: 'center', gap: '20px', flex: 1 },
-  itemImageWrapper: { width: '70px', height: '70px', borderRadius: '16px', overflow: 'hidden', backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #f1f3f5', flexShrink: 0 },
-  itemImg: { width: '100%', height: '100%', objectFit: 'cover' },
-  itemEmoji: { fontSize: '32px' },
-  itemInfo: { display: 'flex', flexDirection: 'column', gap: '4px' },
-  itemName: { fontSize: '18px', fontWeight: '700', color: '#212529', margin: 0 },
-  itemFarm: { fontSize: '13px', color: '#6c757d', fontWeight: '500', margin: 0 },
-  itemMiddle: { display: 'flex', alignItems: 'center', gap: '40px', flex: 1, justifyContent: 'center' },
-  itemWeight: { fontSize: '15px', fontWeight: '600', color: '#495057', backgroundColor: '#f1f3f5', padding: '6px 12px', borderRadius: '12px' },
-  itemUnitPrice: { fontSize: '14px', color: '#868e96', fontWeight: '500' },
-  itemRight: { display: 'flex', alignItems: 'center', gap: '24px', justifyContent: 'flex-end', flex: 1 },
-  itemTotalPrice: { fontSize: '18px', fontWeight: '800', color: '#e07a5f' },
-  removeBtn: { width: '36px', height: '36px', borderRadius: '10px', backgroundColor: '#fff5f5', color: '#fa5252', border: '1px solid #ffe3e3', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
-  rightCol: { display: 'flex', flexDirection: 'column', gap: '24px', position: 'sticky', top: '24px' },
-  summaryCard: { backgroundColor: '#ffffff', borderRadius: '24px', padding: '32px', border: '1px solid #e9ecef', boxShadow: '0 12px 36px rgba(0,0,0,0.04)' },
-  summaryTitle: { fontSize: '20px', fontWeight: '800', color: '#212529', marginBottom: '24px', textAlign: 'center' },
-  summaryBody: { display: 'flex', flexDirection: 'column', gap: '16px' },
-  summaryRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  summaryLabel: { fontSize: '15px', color: '#6c757d', fontWeight: '500' },
-  summaryValue: { fontSize: '16px', fontWeight: '700', color: '#212529' },
-  divider: { height: '1px', backgroundColor: '#e9ecef', margin: '8px 0' },
-  promoSection: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  promoLabel: { fontSize: '13px', fontWeight: '700', color: '#495057' },
-  promoInputGroup: { position: 'relative', display: 'flex', gap: '8px' },
-  promoIcon: { position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', display: 'flex' },
-  promoInput: { flex: 1, padding: '12px 14px 12px 40px', borderRadius: '12px', border: '1.5px solid #dee2e6', backgroundColor: '#f8f9fa', fontSize: '14px', outline: 'none', fontWeight: '500' },
-  promoBtn: { padding: '0 20px', backgroundColor: '#212529', color: 'white', border: 'none', borderRadius: '12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' },
-  totalRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px', marginBottom: '24px' },
-  totalLabel: { fontSize: '18px', fontWeight: '800', color: '#212529' },
-  totalValue: { fontSize: '28px', fontWeight: '900', color: '#e07a5f' },
-  checkoutBtn: { width: '100%', padding: '18px', backgroundColor: '#e07a5f', color: 'white', border: 'none', borderRadius: '16px', fontSize: '16px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', boxShadow: '0 8px 24px rgba(224,122,95,0.25)' },
-  continueShoppingBtn: { width: '100%', padding: '16px', backgroundColor: 'transparent', color: '#1b4d3e', border: '1.5px solid #1b4d3e', borderRadius: '16px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
-  secureCard: { backgroundColor: '#e9f5ee', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid #b7e4c7' },
-  secureItem: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '600', color: '#1b4d3e' },
-  emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', backgroundColor: '#ffffff', borderRadius: '20px', border: '1px dashed #ced4da' },
-  emptyTitle: { fontSize: '20px', fontWeight: '800', color: '#212529', marginBottom: '8px' },
-  emptyText: { fontSize: '15px', color: '#6c757d', marginBottom: '24px', textAlign: 'center' },
-  continueBtn: { padding: '14px 28px', backgroundColor: '#1b4d3e', color: 'white', borderRadius: '12px', fontSize: '15px', fontWeight: '700', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' },
+  container: {
+    maxWidth: '1100px',
+    margin: '0 auto',
+    padding: '40px 24px 80px',
+    fontFamily: "'Plus Jakarta Sans', sans-serif",
+  },
+  header: {
+    marginBottom: '32px',
+  },
+  backBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 16px',
+    backgroundColor: '#f1f3f5',
+    border: 'none',
+    borderRadius: '12px',
+    fontSize: '14px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    marginBottom: '12px',
+  },
+  title: {
+    fontSize: '28px',
+    fontWeight: '900',
+    color: '#212529',
+    margin: 0,
+  },
+  subtitle: {
+    fontSize: '14px',
+    color: '#6c757d',
+    margin: '4px 0 0 0',
+  },
+
+  emptyState: {
+    textAlign: 'center',
+    padding: '80px 20px',
+    color: '#6c757d',
+  },
+  emptyTitle: {
+    fontSize: '22px',
+    fontWeight: '800',
+    color: '#212529',
+    margin: '16px 0 8px 0',
+  },
+  emptyDesc: {
+    fontSize: '16px',
+    margin: '0 0 24px 0',
+  },
+  emptyBtn: {
+    padding: '12px 32px',
+    backgroundColor: '#2d6a4f',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '12px',
+    fontSize: '16px',
+    fontWeight: '700',
+    cursor: 'pointer',
+  },
+
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: '1.5fr 1fr',
+    gap: '32px',
+    alignItems: 'start',
+  },
+
+  productsSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+
+  productCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    backgroundColor: '#ffffff',
+    padding: '16px',
+    borderRadius: '16px',
+    border: '1px solid #e9ecef',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+  },
+  productImage: {
+    width: '80px',
+    height: '80px',
+    borderRadius: '12px',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productName: {
+    fontSize: '16px',
+    fontWeight: '700',
+    color: '#212529',
+    margin: '0 0 4px 0',
+  },
+  productFarm: {
+    fontSize: '13px',
+    color: '#6c757d',
+    margin: '0 0 4px 0',
+  },
+  productPrice: {
+    fontSize: '14px',
+    fontWeight: '700',
+    color: '#e07a5f',
+    margin: '0 0 8px 0',
+  },
+  quantityControl: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  qtyBtn: {
+    width: '28px',
+    height: '28px',
+    borderRadius: '8px',
+    backgroundColor: '#f1f3f5',
+    border: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    fontWeight: '700',
+  },
+  qtyValue: {
+    fontSize: '16px',
+    fontWeight: '700',
+    minWidth: '24px',
+    textAlign: 'center',
+  },
+  productActions: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: '8px',
+  },
+  productSubtotal: {
+    fontSize: '15px',
+    fontWeight: '800',
+    color: '#212529',
+  },
+  removeBtn: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '4px',
+  },
+
+  summarySection: {
+    backgroundColor: '#ffffff',
+    borderRadius: '16px',
+    border: '1px solid #e9ecef',
+    padding: '24px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+    position: 'sticky',
+    top: '80px',
+  },
+  summaryTitle: {
+    fontSize: '18px',
+    fontWeight: '800',
+    color: '#212529',
+    margin: '0 0 20px 0',
+  },
+  summaryRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: '14px',
+    color: '#495057',
+    padding: '6px 0',
+  },
+  divider: {
+    height: '1px',
+    backgroundColor: '#e9ecef',
+    margin: '12px 0',
+  },
+  totalRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '8px 0',
+    marginTop: '4px',
+  },
+  totalLabel: {
+    fontSize: '16px',
+    fontWeight: '700',
+    color: '#212529',
+  },
+  totalValue: {
+    fontSize: '20px',
+    fontWeight: '900',
+    color: '#e07a5f',
+  },
+
+  // Paiement
+  paymentSection: {
+    marginTop: '8px',
+  },
+  paymentTitle: {
+    fontSize: '15px',
+    fontWeight: '700',
+    color: '#212529',
+    margin: '0 0 12px 0',
+  },
+  paymentOptions: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  paymentOption: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 14px',
+    borderRadius: '12px',
+    border: '1.5px solid #dee2e6',
+    backgroundColor: '#f8f9fa',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  },
+  paymentIcon: {
+    fontSize: '18px',
+  },
+  paymentLabel: {
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#212529',
+  },
+  paymentForm: {
+    marginTop: '12px',
+  },
+  paymentInputLabel: {
+    display: 'block',
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#495057',
+    marginBottom: '4px',
+  },
+  paymentInput: {
+    width: '100%',
+    padding: '10px 14px',
+    borderRadius: '10px',
+    border: '1.5px solid #dee2e6',
+    fontSize: '14px',
+    backgroundColor: '#f8f9fa',
+    outline: 'none',
+    boxSizing: 'border-box',
+    transition: 'border-color 0.2s',
+  },
+  errorBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 12px',
+    backgroundColor: '#fdf1ed',
+    borderRadius: '10px',
+    border: '1px solid #f5d4c8',
+    marginTop: '12px',
+  },
+  errorText: {
+    fontSize: '13px',
+    color: '#e07a5f',
+    fontWeight: '600',
+  },
+  successBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 12px',
+    backgroundColor: '#e9f5ee',
+    borderRadius: '10px',
+    border: '1px solid #b7e4c7',
+    marginTop: '12px',
+  },
+  successText: {
+    fontSize: '13px',
+    color: '#2d6a4f',
+    fontWeight: '600',
+  },
+  checkoutBtn: {
+    width: '100%',
+    padding: '14px',
+    backgroundColor: '#2d6a4f',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '12px',
+    fontSize: '16px',
+    fontWeight: '800',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    marginTop: '16px',
+    transition: 'opacity 0.2s',
+    boxShadow: '0 8px 24px rgba(45,106,79,0.25)',
+  },
+  securityBadges: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '16px',
+    marginTop: '16px',
+  },
+  badge: {
+    fontSize: '12px',
+    color: '#6c757d',
+    fontWeight: '600',
+  },
 };

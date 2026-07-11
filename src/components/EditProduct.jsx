@@ -1,16 +1,19 @@
-
-// src/components/AddProduct.jsx
-import React, { useState, useRef } from 'react';
+// src/components/EditProduct.jsx
+import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Upload, X } from 'lucide-react';
 
-export default function AddProduct({ onProductAdded, onCancel }) {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('Légumes');
-  const [quantity, setQuantity] = useState('');
-  const [price, setPrice] = useState('');
-  const [description, setDescription] = useState('');
+export default function EditProduct({ 
+  product, 
+  onSave, 
+  onCancel 
+}) {
+  const [name, setName] = useState(product?.name || '');
+  const [category, setCategory] = useState(product?.category || 'Légumes');
+  const [quantity, setQuantity] = useState(product?.stock || '');
+  const [price, setPrice] = useState(product?.price || '');
+  const [description, setDescription] = useState(product?.description || '');
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+  const [imagePreview, setImagePreview] = useState(product?.image || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -41,8 +44,9 @@ export default function AddProduct({ onProductAdded, onCancel }) {
     }
     setIsSubmitting(true);
     setTimeout(() => {
-      const newProduct = {
-        id: Date.now(),
+      const updatedProduct = {
+        ...product,
+        id: product.id,
         name: name.trim(),
         category,
         stock: parseFloat(quantity) || 0,
@@ -50,9 +54,9 @@ export default function AddProduct({ onProductAdded, onCancel }) {
         image: imagePreview,
         description: description.trim(),
         status: 'Actif',
-        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
-      if (onProductAdded) onProductAdded(newProduct);
+      if (onSave) onSave(updatedProduct);
       setIsSubmitting(false);
     }, 800);
   };
@@ -63,7 +67,7 @@ export default function AddProduct({ onProductAdded, onCancel }) {
         <button onClick={onCancel} style={styles.backBtn}>
           <ArrowLeft size={20} />
         </button>
-        <h2 style={styles.title}>Ajouter un produit</h2>
+        <h2 style={styles.title}>Modifier le produit</h2>
       </div>
 
       <form style={styles.form} onSubmit={handleSubmit}>
@@ -139,7 +143,7 @@ export default function AddProduct({ onProductAdded, onCancel }) {
               style={{ ...styles.publishBtn, opacity: isSubmitting ? 0.7 : 1 }}
               disabled={isSubmitting}
             >
-              {isSubmitting ? '⏳ Publication...' : '🚀 Publier le produit'}
+              {isSubmitting ? '⏳ Mise à jour...' : '💾 Mettre à jour le produit'}
             </button>
           </div>
 
@@ -301,7 +305,7 @@ const styles = {
   },
   publishBtn: {
     padding: '14px',
-    backgroundColor: '#e07a5f',
+    backgroundColor: '#2d6a4f',
     color: '#ffffff',
     border: 'none',
     borderRadius: '12px',
