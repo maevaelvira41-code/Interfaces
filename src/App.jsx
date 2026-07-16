@@ -604,7 +604,7 @@ export default function App() {
           onBackHome={() => navigate('home')}
         />;
       case 'message':
-        return <MessagePage vendor={selectedVendor} onBack={() => navigate('product-detail')} />;
+        return <MessagePage vendor={selectedVendor} currentUser={currentUser} onBack={() => navigate('product-detail')} />;
       case 'user-profile':
         return <UserProfile
           currentUser={currentUser}

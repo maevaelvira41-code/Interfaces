@@ -1,60 +1,83 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ArrowLeft, Send, Phone, Video, MoreVertical, Check, CheckCheck } from 'lucide-react';
+import { messageApi } from '../services/api';
 
-export default function MessagePage({ onBack, vendor }) {
+/** Convertit un MessageResponse backend en objet bulle affichable. */
+function mapMessage(msg, currentUserId) {
+  return {
+    id: msg.id,
+    text: msg.contenu,
+    sender: msg.expediteurId === currentUserId ? 'client' : 'vendor',
+    time: msg.dateEnvoi
+      ? new Date(msg.dateEnvoi).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+      : '',
+    status: msg.estLu ? 'read' : 'sent',
+  };
+}
+
+export default function MessagePage({ onBack, vendor, currentUser }) {
 
   const vendorInfo = vendor || { name: 'Ferme Dschang', product: 'Banane Fraîche' };
+  const destinataireId = vendorInfo.id;
 
   const [input, setInput] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [chargement, setChargement] = useState(true);
+  const [erreur, setErreur] = useState(null);
+  const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const bottomRef = useRef(null);
 
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      text: `Bonjour ! Je suis intéressé(e) par votre produit "${vendorInfo.product}". Est-il encore disponible ?`,
-      sender: 'client',
-      time: '09:00',
-      status: 'read'
-    },
-    {
-      id: 2,
-      text: `Bonjour ! Oui, le produit est bien disponible. Quelle quantité souhaitez-vous commander ?`,
-      sender: 'vendor',
-      time: '09:02',
-      status: 'read'
-    },
-  ]);
+  // Charge la conversation réelle depuis message-service au montage.
+  const chargerConversation = useCallback(async () => {
+    if (!destinataireId) {
+      setErreur("Impossible de démarrer la conversation : producteur introuvable.");
+      setChargement(false);
+      return;
+    }
+    setChargement(true);
+    setErreur(null);
+    try {
+      const data = await messageApi.getConversation(destinataireId);
+      const mapped = (data || []).map((m) => mapMessage(m, currentUser?.id));
+      setMessages(mapped);
+
+      // Marque comme lus les messages reçus du vendeur qui ne le sont pas encore.
+      (data || [])
+        .filter((m) => m.destinataireId === currentUser?.id && !m.estLu)
+        .forEach((m) => {
+          messageApi.marquerLu(m.id).catch(() => {});
+        });
+    } catch (e) {
+      setErreur(e?.message || "Impossible de charger la conversation.");
+    } finally {
+      setChargement(false);
+    }
+  }, [destinataireId, currentUser?.id]);
+
+  useEffect(() => {
+    chargerConversation();
+  }, [chargerConversation]);
 
   // Scroll automatique vers le bas
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  const handleSend = async () => {
+    const contenu = input.trim();
+    if (!contenu || !destinataireId || envoiEnCours) return;
 
-    const newMsg = {
-      id: messages.length + 1,
-      text: input.trim(),
-      sender: 'client',
-      time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      status: 'sent'
-    };
-
-    setMessages(prev => [...prev, newMsg]);
-    setInput('');
-
-    // Réponse automatique du vendeur après 1.5s
-    setTimeout(() => {
-      const autoReply = {
-        id: messages.length + 2,
-        text: 'Merci pour votre message ! Je vous réponds dès que possible. 🌿',
-        sender: 'vendor',
-        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-        status: 'read'
-      };
-      setMessages(prev => [...prev, autoReply]);
-    }, 1500);
+    setEnvoiEnCours(true);
+    setErreur(null);
+    try {
+      const response = await messageApi.envoyerMessage({ destinataireId, contenu });
+      setMessages((prev) => [...prev, mapMessage(response, currentUser?.id)]);
+      setInput('');
+    } catch (e) {
+      setErreur(e?.message || "L'envoi du message a échoué. Réessayez.");
+    } finally {
+      setEnvoiEnCours(false);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -95,8 +118,18 @@ export default function MessagePage({ onBack, vendor }) {
         </span>
       </div>
 
+      {erreur && (
+        <div style={styles.errorBanner}>{erreur}</div>
+      )}
+
       {/* MESSAGES */}
       <div style={styles.messagesArea}>
+        {chargement && (
+          <p style={styles.hint}>Chargement de la conversation...</p>
+        )}
+        {!chargement && messages.length === 0 && !erreur && (
+          <p style={styles.hint}>Aucun message pour le moment. Dites bonjour 👋</p>
+        )}
         {messages.map(msg => (
           <div
             key={msg.id}
@@ -143,13 +176,13 @@ export default function MessagePage({ onBack, vendor }) {
           <button
             style={{
               ...styles.sendBtn,
-              backgroundColor: input.trim() ? '#2d6a4f' : '#dee2e6',
-              cursor: input.trim() ? 'pointer' : 'default'
+              backgroundColor: input.trim() && !envoiEnCours ? '#2d6a4f' : '#dee2e6',
+              cursor: input.trim() && !envoiEnCours ? 'pointer' : 'default'
             }}
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || envoiEnCours}
           >
-            <Send size={18} color={input.trim() ? '#ffffff' : '#adb5bd'} />
+            <Send size={18} color={input.trim() && !envoiEnCours ? '#ffffff' : '#adb5bd'} />
           </button>
         </div>
         <p style={styles.hint}>Appuyez sur Entrée pour envoyer</p>
@@ -228,6 +261,15 @@ const styles = {
     borderRadius: '10px',
     display: 'flex',
     alignItems: 'center',
+  },
+
+  errorBanner: {
+    backgroundColor: '#fdecea',
+    color: '#b3261e',
+    fontSize: '13px',
+    fontWeight: '600',
+    padding: '10px 24px',
+    textAlign: 'center',
   },
 
   // BANNIERE PRODUIT

@@ -31,10 +31,11 @@ export default function ProductDetail({ onBack, onAddToCart, onContactVendor, on
   const handleDecrease = () => setQuantity(Math.max(1, quantity - 1));
   const handleIncrease = () => setQuantity(Math.min(product.stock || 30, quantity + 1));
 
-  // Le producteur n'a pas d'id dédié dans le modèle produit actuel (juste le nom de la ferme) :
-  // on construit un objet producteur minimal, cohérent avec le pattern déjà utilisé par onContactVendor.
+  // producteurId vient de produit-service (ProduitResponse.producteurId), propagé
+  // par productMapping.mapProduitPourVitrine. C'est le vrai id utilisateur du
+  // producteur, nécessaire pour la messagerie et le profil producteur.
   const producteur = {
-    id: product.farm,
+    id: product.producteurId,
     nom: product.farm,
     verificationStatus: 'approved',
   };
@@ -135,7 +136,7 @@ export default function ProductDetail({ onBack, onAddToCart, onContactVendor, on
               {/* BOUTON CONTACTER CLIQUABLE */}
               <button
                 style={styles.contactBtn}
-                onClick={() => onContactVendor && onContactVendor({ name: product.farm, product: product.name })}
+                onClick={() => onContactVendor && onContactVendor({ id: product.producteurId, name: product.farm, product: product.name })}
               >
                 <MessageCircle size={16} />
                 Contacter

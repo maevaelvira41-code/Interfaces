@@ -131,7 +131,7 @@ export default function ProducerProfile({
             </div>
           </div>
           {onContactVendor && (
-            <button style={styles.contactBtn} onClick={() => onContactVendor({ name: producteur.nom })}>
+            <button style={styles.contactBtn} onClick={() => onContactVendor({ id: producteur.id, name: producteur.nom })}>
               <MessageCircle size={16} /> Contacter
             </button>
           )}

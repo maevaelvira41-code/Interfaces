@@ -28,6 +28,7 @@ export function mapProduitPourVitrine(produit) {
     id: produit.id,
     name: produit.nom,
     farm: produit.producteurNom || 'Producteur',
+    producteurId: produit.producteurId,
     price: produit.prix != null ? Number(produit.prix) : 0,
     stock: produit.stock ?? 0,
     categoryId: produit.categorieId,
