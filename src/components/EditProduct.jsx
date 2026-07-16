@@ -1,6 +1,8 @@
 // src/components/EditProduct.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Upload, X } from 'lucide-react';
+import { produitApi } from '../services/api';
+import { mapCategorie, mapProduitPourVendeur, construireProduitRequest } from '../services/productMapping';
 
 export default function EditProduct({ 
   product, 
@@ -8,14 +10,27 @@ export default function EditProduct({
   onCancel 
 }) {
   const [name, setName] = useState(product?.name || '');
-  const [category, setCategory] = useState(product?.category || 'Légumes');
+  const [categories, setCategories] = useState([]);
+  const [category, setCategory] = useState(product?.categoryId != null ? String(product.categoryId) : '');
   const [quantity, setQuantity] = useState(product?.stock || '');
   const [price, setPrice] = useState(product?.price || '');
   const [description, setDescription] = useState(product?.description || '');
   const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(product?.image || null);
+  const [imagePreview, setImagePreview] = useState(product?.imageUrl || product?.image || null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Charger les vraies catégories depuis produit-service au montage.
+  useEffect(() => {
+    produitApi.getCategories()
+      .then((data) => {
+        const cats = (data || []).map(mapCategorie);
+        setCategories(cats);
+        if (!category && cats.length > 0) setCategory(String(cats[0].id));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleImageChange = (file) => {
     if (!file) return;
@@ -36,29 +51,29 @@ export default function EditProduct({
     setImagePreview(null);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name.trim() || !price || !quantity || !imagePreview) {
       alert('Veuillez remplir tous les champs obligatoires (*) et ajouter une image');
       return;
     }
     setIsSubmitting(true);
-    setTimeout(() => {
-      const updatedProduct = {
-        ...product,
-        id: product.id,
-        name: name.trim(),
-        category,
-        stock: parseFloat(quantity) || 0,
-        price: parseFloat(price) || 0,
-        image: imagePreview,
+    try {
+      const request = construireProduitRequest({
+        nom: name.trim(),
         description: description.trim(),
-        status: 'Actif',
-        updatedAt: new Date().toISOString(),
-      };
-      if (onSave) onSave(updatedProduct);
+        prix: price,
+        stock: quantity,
+        imageUrl: imagePreview,
+        categorieId: category,
+      });
+      const produitModifie = await produitApi.modifierProduit(product.id, request);
+      if (onSave) onSave(mapProduitPourVendeur(produitModifie));
+    } catch (err) {
+      alert(err?.message || 'La mise à jour du produit a échoué.');
+    } finally {
       setIsSubmitting(false);
-    }, 800);
+    }
   };
 
   return (
@@ -90,14 +105,10 @@ export default function EditProduct({
               <div style={styles.field}>
                 <label style={styles.label}>Catégorie *</label>
                 <select value={category} onChange={(e) => setCategory(e.target.value)} style={styles.select}>
-                  <option>Légumes</option>
-                  <option>Fruits</option>
-                  <option>Viande & Volaille</option>
-                  <option>Produits Laitiers</option>
-                  <option>Poisson & Fruits de Mer</option>
-                  <option>Céréales</option>
-                  <option>Épices</option>
-                  <option>Miel</option>
+                  {categories.length === 0 && <option value="">Chargement...</option>}
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
                 </select>
               </div>
               <div style={styles.field}>

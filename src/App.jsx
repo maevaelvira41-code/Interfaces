@@ -34,8 +34,9 @@ import MyProducts from './components/MyProducts';
 import NotificationsCenter from './components/NotificationsCenter';
 import OrderDetailAdmin from './components/OrderDetailAdmin';
 import ChangePassword from './components/ChangePassword';
-import { authApi, utilisateurApi, getSession } from './services/api';
+import { authApi, utilisateurApi, produitApi, getSession } from './services/api';
 import { ROLE_FRONTEND_TO_BACKEND, joinNomComplet, mapProfileToFrontendUser } from './services/userMapping';
+import { mapProduitPourVendeur, construireProduitRequest } from './services/productMapping';
 
 export default function App() {
   const [screen, setScreen] = useState('home');
@@ -95,8 +96,6 @@ export default function App() {
     if (savedUsers) { try { setRegisteredUsers(JSON.parse(savedUsers)); } catch {} }
     const savedCart = localStorage.getItem('cartItems');
     if (savedCart) { try { setCartItems(JSON.parse(savedCart)); } catch {} }
-    const savedProducts = localStorage.getItem('vendeurProducts');
-    if (savedProducts) { try { setVendeurProducts(JSON.parse(savedProducts)); } catch {} }
     const savedVerifications = localStorage.getItem('vendorVerifications');
     if (savedVerifications) { try { setVendorVerifications(JSON.parse(savedVerifications)); } catch {} }
     const savedAvis = localStorage.getItem('avisList');
@@ -133,7 +132,6 @@ export default function App() {
   // ===== SAUVEGARDE =====
   useEffect(() => { localStorage.setItem('registeredUsers', JSON.stringify(registeredUsers)); }, [registeredUsers]);
   useEffect(() => { localStorage.setItem('cartItems', JSON.stringify(cartItems)); }, [cartItems]);
-  useEffect(() => { localStorage.setItem('vendeurProducts', JSON.stringify(vendeurProducts)); }, [vendeurProducts]);
   useEffect(() => { localStorage.setItem('vendorVerifications', JSON.stringify(vendorVerifications)); }, [vendorVerifications]);
   useEffect(() => { localStorage.setItem('avisList', JSON.stringify(avisList)); }, [avisList]);
   useEffect(() => { localStorage.setItem('signalements', JSON.stringify(signalements)); }, [signalements]);
@@ -148,6 +146,28 @@ export default function App() {
       setActivePlan(currentUser.plan || 'gratuit');
     }
   }, [currentUser]);
+
+  // ===== PRODUITS DU VENDEUR CONNECTÉ =====
+  // Remplace l'ancien stockage local : on va chercher les vrais produits
+  // du vendeur auprès de produit-service dès qu'un vendeur est connecté.
+  const refreshVendeurProducts = async () => {
+    if (!currentUser || currentUser.role !== 'vendeur') return;
+    try {
+      const data = await produitApi.getMesProduits();
+      setVendeurProducts((data || []).map(mapProduitPourVendeur));
+    } catch (err) {
+      console.error('Impossible de charger vos produits :', err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.role === 'vendeur') {
+      refreshVendeurProducts();
+    } else {
+      setVendeurProducts([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role]);
 
   // ===== GARDE AUTH =====
   const requireLogin = (action) => {
@@ -311,6 +331,10 @@ export default function App() {
   };
 
   // ===== GESTION DES PRODUITS =====
+  // AddProduct.jsx et EditProduct.jsx appellent désormais produitApi
+  // eux-mêmes ; ici on se contente de répercuter le résultat dans l'état
+  // local pour un retour visuel immédiat sur les autres écrans (StockAlerts,
+  // SellerDashboard...) qui partagent tous vendeurProducts.
   const handleAddProduct = (newProduct) => {
     setVendeurProducts(prev => [...prev, newProduct]);
     navigate('my-products');
@@ -329,15 +353,33 @@ export default function App() {
     navigate('my-products');
   };
 
-  const handleDeleteProduct = (id) => {
+  const handleDeleteProduct = async (id) => {
+    const previous = vendeurProducts;
     setVendeurProducts(prev => prev.filter(p => p.id !== id));
+    try {
+      await produitApi.supprimerProduit(id);
+    } catch (err) {
+      alert(err?.message || 'La suppression du produit a échoué.');
+      setVendeurProducts(previous); // on annule le changement optimiste si l'appel échoue
+    }
   };
 
-  const handleDuplicateProduct = (product) => {
-    setVendeurProducts(prev => [
-      ...prev,
-      { ...product, id: Date.now(), name: `${product.name} (Copie)`, sales: 0 },
-    ]);
+  const handleDuplicateProduct = async (product) => {
+    try {
+      const request = construireProduitRequest({
+        nom: `${product.name} (Copie)`,
+        description: product.description,
+        prix: product.price,
+        stock: product.stock,
+        imageUrl: product.imageUrl,
+        categorieId: product.categoryId,
+        localisation: product.localisation,
+      });
+      const produitCree = await produitApi.publierProduit(request);
+      setVendeurProducts(prev => [...prev, mapProduitPourVendeur(produitCree)]);
+    } catch (err) {
+      alert(err?.message || 'La duplication du produit a échoué.');
+    }
   };
 
   // ===== APPROBATION / REJET =====

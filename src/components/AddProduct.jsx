@@ -1,18 +1,33 @@
 
 // src/components/AddProduct.jsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, Upload, X } from 'lucide-react';
+import { produitApi } from '../services/api';
+import { mapCategorie, mapProduitPourVendeur, construireProduitRequest } from '../services/productMapping';
 
 export default function AddProduct({ onProductAdded, onCancel }) {
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('Légumes');
+  const [categories, setCategories] = useState([]);
+  const [category, setCategory] = useState('');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [erreur, setErreur] = useState('');
   const fileInputRef = useRef(null);
+
+  // Charger les catégories réelles depuis produit-service au montage.
+  useEffect(() => {
+    produitApi.getCategories()
+      .then((data) => {
+        const cats = (data || []).map(mapCategorie);
+        setCategories(cats);
+        if (cats.length > 0) setCategory(String(cats[0].id));
+      })
+      .catch(() => setErreur('Impossible de charger les catégories.'));
+  }, []);
 
   const handleImageChange = (file) => {
     if (!file) return;
@@ -33,28 +48,32 @@ export default function AddProduct({ onProductAdded, onCancel }) {
     setImagePreview(null);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setErreur('');
     if (!name.trim() || !price || !quantity || !imagePreview) {
       alert('Veuillez remplir tous les champs obligatoires (*) et ajouter une image');
       return;
     }
     setIsSubmitting(true);
-    setTimeout(() => {
-      const newProduct = {
-        id: Date.now(),
-        name: name.trim(),
-        category,
-        stock: parseFloat(quantity) || 0,
-        price: parseFloat(price) || 0,
-        image: imagePreview,
+    try {
+      const request = construireProduitRequest({
+        nom: name.trim(),
         description: description.trim(),
-        status: 'Actif',
-        createdAt: new Date().toISOString(),
-      };
-      if (onProductAdded) onProductAdded(newProduct);
+        prix: price,
+        stock: quantity,
+        imageUrl: imagePreview,
+        categorieId: category,
+      });
+      const produitCree = await produitApi.publierProduit(request);
+      if (onProductAdded) onProductAdded(mapProduitPourVendeur(produitCree));
+    } catch (err) {
+      const message = err?.message || 'La publication du produit a échoué.';
+      setErreur(message);
+      alert(message);
+    } finally {
       setIsSubmitting(false);
-    }, 800);
+    }
   };
 
   return (
@@ -86,14 +105,10 @@ export default function AddProduct({ onProductAdded, onCancel }) {
               <div style={styles.field}>
                 <label style={styles.label}>Catégorie *</label>
                 <select value={category} onChange={(e) => setCategory(e.target.value)} style={styles.select}>
-                  <option>Légumes</option>
-                  <option>Fruits</option>
-                  <option>Viande & Volaille</option>
-                  <option>Produits Laitiers</option>
-                  <option>Poisson & Fruits de Mer</option>
-                  <option>Céréales</option>
-                  <option>Épices</option>
-                  <option>Miel</option>
+                  {categories.length === 0 && <option value="">Chargement...</option>}
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
                 </select>
               </div>
               <div style={styles.field}>
@@ -136,8 +151,8 @@ export default function AddProduct({ onProductAdded, onCancel }) {
 
             <button
               type="submit"
-              style={{ ...styles.publishBtn, opacity: isSubmitting ? 0.7 : 1 }}
-              disabled={isSubmitting}
+              style={{ ...styles.publishBtn, opacity: (isSubmitting || !category) ? 0.7 : 1 }}
+              disabled={isSubmitting || !category}
             >
               {isSubmitting ? '⏳ Publication...' : '🚀 Publier le produit'}
             </button>

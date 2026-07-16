@@ -1,7 +1,14 @@
 // src/components/AgroMarketHome.jsx
 import React, { useState } from 'react';
 import { Search, ShoppingBag, Leaf, ShieldCheck, Truck, Star, ArrowRight, UserPlus, PackageSearch } from 'lucide-react';
-import { CATEGORIES_META, PRODUCTS, CATEGORY_NAMES } from '../data/products';
+import useProduits from '../hooks/useProduits';
+
+// Couleurs/images par défaut pour les vignettes de catégorie, appliquées en
+// tournant (le backend ne fournit qu'un id + un nom, pas de style visuel).
+const STYLE_CATEGORIES_PAR_DEFAUT = [
+  { image: '/image/marche.jpg', color: '#e9f5ee' },
+  { image: '/image/poulet.jpg', color: '#fdf1ed' },
+];
 
 const translations = {
   fr: {
@@ -67,23 +74,20 @@ export default function AgroMarketHome({
   currentUser,
   lang = 'fr',
 }) {
+  const { produits: allProducts, categories: categoriesBrutes, chargement, erreur } = useProduits();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredProducts, setFilteredProducts] = useState(null);
   const [activeCategory, setActiveCategory] = useState(null);
 
   const t = translations[lang];
 
-  const categories = CATEGORIES_META.map(c => ({
+  const categories = categoriesBrutes.map((c, i) => ({
     id: c.id,
     name: c.name,
-    count: PRODUCTS.filter(p => p.categoryId === c.id).length,
-    image: c.image,
-    color: c.color,
-  }));
-
-  const allProducts = PRODUCTS.map(p => ({
-    ...p,
-    catName: CATEGORY_NAMES[p.categoryId] || p.categoryId,
+    count: allProducts.filter(p => p.categoryId === c.id).length,
+    image: STYLE_CATEGORIES_PAR_DEFAUT[i % STYLE_CATEGORIES_PAR_DEFAUT.length].image,
+    color: STYLE_CATEGORIES_PAR_DEFAUT[i % STYLE_CATEGORIES_PAR_DEFAUT.length].color,
   }));
 
   // Fonction de filtrage
@@ -99,12 +103,7 @@ export default function AgroMarketHome({
       // Recherche par nom de la ferme
       if (p.farm.toLowerCase().includes(q)) return true;
       // Recherche par nom complet de la catégorie
-      if (p.catName.toLowerCase().includes(q)) return true;
-      // Mots-clés spécifiques
-      if ((q === 'agricole' || q === 'produit agricole' || q === 'produits agricoles') && p.categoryId === 'agricole')
-        return true;
-      if ((q === 'elevage' || q === 'élevage' || q === 'pêche' || q === 'peche' || q === 'poisson') && p.categoryId === 'elevage')
-        return true;
+      if (p.category.toLowerCase().includes(q)) return true;
       return false;
     });
     setFilteredProducts(results);
@@ -237,13 +236,17 @@ export default function AgroMarketHome({
             </div>
           </div>
 
-          {displayedProducts.length > 0 ? (
+          {chargement ? (
+            <p style={{ color: '#6c757d' }}>Chargement des produits...</p>
+          ) : erreur ? (
+            <p style={{ color: '#e07a5f' }}>Impossible de charger les produits : {erreur}</p>
+          ) : displayedProducts.length > 0 ? (
             <div style={styles.productGrid}>
               {displayedProducts.map(prod => (
                 <div key={prod.id} style={styles.productCard} onClick={() => onNavigateToProduct(prod)}>
                   <div style={styles.productImageWrap}>
                     <img src={prod.image} alt={prod.name} style={styles.productImg} onError={(e) => { e.target.src = 'https://picsum.photos/seed/' + prod.id + '/300/300'; }} />
-                    <span style={styles.catBadge}>{prod.catName}</span>
+                    <span style={styles.catBadge}>{prod.category}</span>
                     {!prod.stock && <span style={styles.lowStockBadge}>{t.lowStock}</span>}
                   </div>
                   <div style={styles.productInfo}>
