@@ -2,7 +2,7 @@
 // Maps to avis-service (/api/avis) — port 8085 by default.
 
 import { API_URLS } from './config';
-import { httpGet, httpPost, httpPut } from './httpClient';
+import { httpGet, httpPost, httpPut, httpDelete } from './httpClient';
 
 const BASE = API_URLS.avis;
 
@@ -11,6 +11,9 @@ export const publierAvis = (avisRequest) => httpPost(BASE, '/api/avis/publier', 
 
 /** Edit an existing review (must be the author). */
 export const modifierAvis = (id, avisRequest) => httpPut(BASE, `/api/avis/${id}`, avisRequest);
+
+/** Delete a review (must be the author). */
+export const supprimerAvis = (id) => httpDelete(BASE, `/api/avis/${id}`);
 
 /** Get all reviews for a product. Public. */
 export const getAvisParProduit = (produitId) =>

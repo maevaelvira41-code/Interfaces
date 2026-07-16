@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Star, MessageCircle, ShieldCheck, Edit3, Flag } from 'lucide-react';
+import { ArrowLeft, Star, MessageCircle, ShieldCheck, Edit3, Trash2, Flag } from 'lucide-react';
 import { produitApi, avisApi } from '../services/api';
 
 // Un avis (backend AvisResponse) : { id, note, commentaire, date, clientId, clientNom, produitId }
@@ -102,6 +102,20 @@ export default function ProducerProfile({
       await chargerAvis();
     } catch (e) {
       setError(e?.message || "La publication de l'avis a échoué.");
+    } finally {
+      setEnvoiEnCours(false);
+    }
+  };
+
+  const handleDelete = async (avisId) => {
+    if (!window.confirm('Supprimer votre avis ?')) return;
+    setEnvoiEnCours(true);
+    setError('');
+    try {
+      await avisApi.supprimerAvis(avisId);
+      await chargerAvis();
+    } catch (e) {
+      setError(e?.message || "La suppression de l'avis a échoué.");
     } finally {
       setEnvoiEnCours(false);
     }
@@ -255,8 +269,11 @@ export default function ProducerProfile({
                   <StarRow value={monAvis.note} size={16} />
                   <p style={styles.myAvisComment}>{monAvis.commentaire}</p>
                   <div style={styles.myAvisActions}>
-                    <button style={styles.editBtn} onClick={() => startEdit(monAvis)}>
+                    <button style={styles.editBtn} onClick={() => startEdit(monAvis)} disabled={envoiEnCours}>
                       <Edit3 size={14} /> Modifier
+                    </button>
+                    <button style={styles.deleteBtn} onClick={() => handleDelete(monAvis.id)} disabled={envoiEnCours}>
+                      <Trash2 size={14} /> Supprimer
                     </button>
                   </div>
                 </div>
