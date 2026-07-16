@@ -36,6 +36,7 @@ export default function ProductDetail({ onBack, onAddToCart, onContactVendor, on
   // producteur, nécessaire pour la messagerie et le profil producteur.
   const producteur = {
     id: product.producteurId,
+    produitId: product.id,
     nom: product.farm,
     verificationStatus: 'approved',
   };

@@ -82,7 +82,6 @@ export default function App() {
   const [activePlan, setActivePlan] = useState('gratuit');
   const [vendeurProducts, setVendeurProducts] = useState([]);
   const [vendorVerifications, setVendorVerifications] = useState([]);
-  const [avisList, setAvisList] = useState([]);
   const [cartItems, setCartItems] = useState([]);
   const [authRedirectMessage, setAuthRedirectMessage] = useState('');
   const [signalements, setSignalements] = useState([]);
@@ -98,8 +97,6 @@ export default function App() {
     if (savedCart) { try { setCartItems(JSON.parse(savedCart)); } catch {} }
     const savedVerifications = localStorage.getItem('vendorVerifications');
     if (savedVerifications) { try { setVendorVerifications(JSON.parse(savedVerifications)); } catch {} }
-    const savedAvis = localStorage.getItem('avisList');
-    if (savedAvis) { try { setAvisList(JSON.parse(savedAvis)); } catch {} }
     const savedSignalements = localStorage.getItem('signalements');
     if (savedSignalements) { try { setSignalements(JSON.parse(savedSignalements)); } catch {} }
     const savedOrders = localStorage.getItem('adminOrders');
@@ -133,7 +130,6 @@ export default function App() {
   useEffect(() => { localStorage.setItem('registeredUsers', JSON.stringify(registeredUsers)); }, [registeredUsers]);
   useEffect(() => { localStorage.setItem('cartItems', JSON.stringify(cartItems)); }, [cartItems]);
   useEffect(() => { localStorage.setItem('vendorVerifications', JSON.stringify(vendorVerifications)); }, [vendorVerifications]);
-  useEffect(() => { localStorage.setItem('avisList', JSON.stringify(avisList)); }, [avisList]);
   useEffect(() => { localStorage.setItem('signalements', JSON.stringify(signalements)); }, [signalements]);
   useEffect(() => { localStorage.setItem('adminOrders', JSON.stringify(adminOrders)); }, [adminOrders]);
   useEffect(() => { localStorage.setItem('notifications', JSON.stringify(notifications)); }, [notifications]);
@@ -396,19 +392,6 @@ export default function App() {
     ]);
     addNotification(1, 'error', `Signalement de ${producteur.nom} par ${currentUser?.prenom || 'un client'}`, '/admin/moderation-panel');
   };
-
-  const handleSubmitAvis = ({ id, note, commentaire }) => {
-    if (id) {
-      setAvisList(prev => prev.map(a => a.id === id ? { ...a, note, commentaire, date: new Date().toISOString() } : a));
-    } else {
-      setAvisList(prev => [
-        ...prev,
-        { id: `avis-${Date.now()}`, id_client: currentUser?.id ?? currentUser?.email ?? 'client-anonyme', id_producteur: selectedVendor?.id, clientNom: currentUser?.prenom || 'Client', note, commentaire, date: new Date().toISOString() },
-      ]);
-    }
-  };
-
-  const handleDeleteAvis = (avisId) => setAvisList(prev => prev.filter(a => a.id !== avisId));
 
   // ===== NAVIGATION =====
   const goToProduct = (product) => { setSelectedProduct(product); setScreen('product-detail'); };
@@ -756,10 +739,7 @@ export default function App() {
       case 'producer-profile':
         return <ProducerProfile
           producteur={selectedVendor}
-          avisList={avisList}
           currentUser={currentUser}
-          onSubmitAvis={handleSubmitAvis}
-          onDeleteAvis={handleDeleteAvis}
           onBack={() => navigate('product-detail')}
           onContactVendor={goToMessage}
           onNavigateToLogin={() => navigate('login-page')}

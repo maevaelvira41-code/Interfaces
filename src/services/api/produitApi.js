@@ -21,6 +21,10 @@ export const rechercherProduits = (filters = {}) =>
 /** Get the logged-in producer's own products. Requires auth. */
 export const getMesProduits = () => httpGet(BASE, '/api/produits/mes-produits');
 
+/** Get a producer's products publicly (producer profile page). No auth needed. */
+export const getProduitsParProducteur = (producteurId) =>
+  httpGet(BASE, `/api/produits/producteur/${producteurId}`, { auth: false });
+
 /** Get one product by id. Public. */
 export const getProduitById = (id) => httpGet(BASE, `/api/produits/${id}`, { auth: false });
 
