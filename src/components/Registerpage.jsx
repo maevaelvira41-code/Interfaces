@@ -53,7 +53,7 @@ export default function RegisterPage({ onRegisterSuccess, onNavigateToLogin }) {
     return newErrors;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = validate();
     if (Object.keys(newErrors).length > 0) {
@@ -62,8 +62,8 @@ export default function RegisterPage({ onRegisterSuccess, onNavigateToLogin }) {
     }
 
     setLoading(true);
-    setTimeout(() => {
-      onRegisterSuccess({
+    try {
+      await onRegisterSuccess({
         role: role,
         prenom: form.prenom,
         nom: form.nom,
@@ -72,8 +72,14 @@ export default function RegisterPage({ onRegisterSuccess, onNavigateToLogin }) {
         password: form.password,
         photo: form.photo || null,
       });
+    } catch (err) {
+      const message = err.message && err.message.length < 200
+        ? err.message
+        : 'Une erreur est survenue lors de la création du compte. Cet email est peut-être déjà utilisé.';
+      setErrors({ general: message });
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
   const getPasswordStrength = () => {

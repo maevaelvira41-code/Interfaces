@@ -34,6 +34,8 @@ import MyProducts from './components/MyProducts';
 import NotificationsCenter from './components/NotificationsCenter';
 import OrderDetailAdmin from './components/OrderDetailAdmin';
 import ChangePassword from './components/ChangePassword';
+import { authApi, utilisateurApi, getSession } from './services/api';
+import { ROLE_FRONTEND_TO_BACKEND, joinNomComplet, mapProfileToFrontendUser } from './services/userMapping';
 
 export default function App() {
   const [screen, setScreen] = useState('home');
@@ -66,9 +68,11 @@ export default function App() {
   };
 
   // ===== COMPTE ADMIN =====
-  const ADMIN_ACCOUNTS = [
-    { id: 'admin-1', role: 'admin', prenom: 'Admin', nom: 'AgroMarket', email: 'admin@agromarket.cm', password: 'admin123', photo: null },
-  ];
+  // NOTE : il n'y a plus de compte admin codé en dur ici. La connexion admin
+  // passe désormais par le vrai backend (auth-service). Un compte avec le
+  // rôle ADMIN doit exister dans la base de utilisateur-service (créé via
+  // POST /api/utilisateurs/admin/creer par un autre admin, ou directement
+  // en base pour le tout premier compte).
 
   // ===== AUTRES ÉTATS =====
   const [showSignalement, setShowSignalement] = useState(false);
@@ -101,14 +105,29 @@ export default function App() {
     if (savedSignalements) { try { setSignalements(JSON.parse(savedSignalements)); } catch {} }
     const savedOrders = localStorage.getItem('adminOrders');
     if (savedOrders) { try { setAdminOrders(JSON.parse(savedOrders)); } catch {} }
-    const storedUser = localStorage.getItem('currentUser');
-    if (storedUser) { try { setCurrentUser(JSON.parse(storedUser)); } catch {} }
     const savedNotifs = localStorage.getItem('notifications');
     if (savedNotifs) { try { setNotifications(JSON.parse(savedNotifs)); } catch {} }
     const savedPlan = localStorage.getItem('activePlan');
     if (savedPlan) { setActivePlan(savedPlan); }
     const savedClientMode = localStorage.getItem('isClientMode');
     if (savedClientMode) { setIsClientMode(JSON.parse(savedClientMode)); }
+
+    // Restaurer la session utilisateur à partir du token JWT stocké,
+    // en revérifiant le profil auprès du backend (utilisateur-service)
+    // plutôt que de faire confiance à une copie locale potentiellement
+    // périmée.
+    const session = getSession();
+    if (session) {
+      utilisateurApi
+        .getUtilisateurById(session.uid)
+        .then((profile) => {
+          setCurrentUser(mapProfileToFrontendUser(profile, session.roles));
+        })
+        .catch(() => {
+          // Token invalide/expiré ou utilisateur supprimé : on nettoie la session.
+          authApi.logout();
+        });
+    }
   }, []);
 
   // ===== SAUVEGARDE =====
@@ -119,10 +138,6 @@ export default function App() {
   useEffect(() => { localStorage.setItem('avisList', JSON.stringify(avisList)); }, [avisList]);
   useEffect(() => { localStorage.setItem('signalements', JSON.stringify(signalements)); }, [signalements]);
   useEffect(() => { localStorage.setItem('adminOrders', JSON.stringify(adminOrders)); }, [adminOrders]);
-  useEffect(() => {
-    if (currentUser) localStorage.setItem('currentUser', JSON.stringify(currentUser));
-    else localStorage.removeItem('currentUser');
-  }, [currentUser]);
   useEffect(() => { localStorage.setItem('notifications', JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem('activePlan', activePlan); }, [activePlan]);
   useEffect(() => { localStorage.setItem('isClientMode', JSON.stringify(isClientMode)); }, [isClientMode]);
@@ -215,19 +230,20 @@ export default function App() {
   };
 
   // ===== CONNEXION =====
-  const validateLogin = (email, password, role) => {
-    const admin = ADMIN_ACCOUNTS.find(
-      u => u.email.toLowerCase() === email.toLowerCase() && u.password === password
-    );
-    if (admin) return admin;
+  // Appelle le vrai backend (auth-service + utilisateur-service).
+  // Retourne l'utilisateur (au format frontend) en cas de succès,
+  // ou lève une erreur avec un message lisible en cas d'échec.
+  const validateLogin = async (email, password, uiRole) => {
+    const authResponse = await authApi.login(email, password);
+    const expectedBackendRole = ROLE_FRONTEND_TO_BACKEND[uiRole];
 
-    const found = registeredUsers.find(
-      u => u.email.toLowerCase() === email.toLowerCase() &&
-           u.password === password &&
-           u.role === role
-    );
-    if (!found) return null;
-    return found;
+    if (!authResponse.roles?.includes(expectedBackendRole)) {
+      authApi.logout();
+      throw new Error(`Aucun compte ${uiRole} trouvé avec ces identifiants.`);
+    }
+
+    const profile = await utilisateurApi.getUtilisateurById(authResponse.uid);
+    return mapProfileToFrontendUser(profile, authResponse.roles);
   };
 
   const handleLoginSuccess = (userData) => {
@@ -248,8 +264,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    authApi.logout();
     setCurrentUser(null);
-    localStorage.removeItem('currentUser');
     setIsClientMode(false);
     setScreen('home');
   };
@@ -268,27 +284,24 @@ export default function App() {
   };
 
   // ===== INSCRIPTION =====
-  const handleRegisterSuccess = ({ role, prenom, nom, email, telephone, password, photo }) => {
-    const newUser = {
-      id: `user-${Date.now()}`,
-      role,
-      prenom,
-      nom,
+  // Crée le compte auprès de utilisateur-service, puis connecte
+  // automatiquement l'utilisateur (auth-service) pour récupérer un token.
+  const handleRegisterSuccess = async ({ role, prenom, nom, email, telephone, password, photo }) => {
+    await utilisateurApi.createUtilisateur({
+      nom: joinNomComplet(prenom, nom),
       email,
+      motDePasse: password,
       telephone,
-      password,
       photo: photo || null,
-      actif: true,
-      dateInscription: new Date().toISOString(),
-      plan: 'gratuit',
-      verificationStatus: 'approved',
-    };
-    setRegisteredUsers(prev => [...prev, newUser]);
-    setActivePlan('gratuit');
+      role: ROLE_FRONTEND_TO_BACKEND[role],
+    });
+
+    const newUser = await validateLogin(email, password, role);
 
     addNotification(1, 'info', `Nouvel utilisateur inscrit : ${prenom} ${nom} (${role})`, '/admin/dashboard');
     addNotification(newUser.id, 'success', `Bienvenue ${prenom} ! Votre compte a été créé.`, '/profil');
 
+    setActivePlan(newUser.plan);
     setCurrentUser(newUser);
     if (role === 'vendeur') {
       setScreen('seller-dashboard');
