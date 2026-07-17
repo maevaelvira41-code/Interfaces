@@ -1,13 +1,11 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Star, MessageCircle, ShieldCheck, Trash2, Edit3, Flag } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { ArrowLeft, Star, MessageCircle, ShieldCheck, Edit3, Trash2, Flag } from 'lucide-react';
+import { produitApi, avisApi } from '../services/api';
 
-// avisList: [{ id, id_client, id_producteur, clientNom, note, commentaire, date }]
+// Un avis (backend AvisResponse) : { id, note, commentaire, date, clientId, clientNom, produitId }
 export default function ProducerProfile({
   producteur,
-  avisList = [],
   currentUser,
-  onSubmitAvis,   // (note, commentaire) => void
-  onDeleteAvis,   // (avisId) => void
   onBack,
   onContactVendor,
   onNavigateToLogin,
@@ -21,7 +19,38 @@ export default function ProducerProfile({
   const [error, setError] = useState('');
   const [editing, setEditing] = useState(false);
 
-  const producteurAvis = avisList.filter(a => a.id_producteur === producteur?.id);
+  const [avisList, setAvisList] = useState([]);
+  const [chargement, setChargement] = useState(true);
+  const [chargeErreur, setChargeErreur] = useState(null);
+  const [envoiEnCours, setEnvoiEnCours] = useState(false);
+
+  // Charge tous les produits du producteur, puis tous les avis de ces
+  // produits (avis-service note un produit, pas directement un producteur).
+  const chargerAvis = useCallback(async () => {
+    if (!producteur?.id) {
+      setChargement(false);
+      return;
+    }
+    setChargement(true);
+    setChargeErreur(null);
+    try {
+      const produits = await produitApi.getProduitsParProducteur(producteur.id);
+      const avisParProduit = await Promise.all(
+        (produits || []).map((p) => avisApi.getAvisParProduit(p.id).catch(() => []))
+      );
+      setAvisList(avisParProduit.flat());
+    } catch (e) {
+      setChargeErreur(e?.message || 'Impossible de charger les avis.');
+    } finally {
+      setChargement(false);
+    }
+  }, [producteur?.id]);
+
+  useEffect(() => {
+    chargerAvis();
+  }, [chargerAvis]);
+
+  const producteurAvis = avisList;
   const totalAvis = producteurAvis.length;
   const moyenne = totalAvis > 0
     ? (producteurAvis.reduce((sum, a) => sum + a.note, 0) / totalAvis)
@@ -35,7 +64,7 @@ export default function ProducerProfile({
 
   // Un client ne peut laisser qu'un seul avis par producteur (on retrouve le sien s'il existe)
   const monAvis = currentUser?.role === 'client'
-    ? producteurAvis.find(a => a.id_client === currentUser.id)
+    ? producteurAvis.find(a => a.clientId === currentUser.id)
     : null;
 
   const startEdit = (avis) => {
@@ -52,14 +81,44 @@ export default function ProducerProfile({
     setError('');
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (note === 0) { setError('Sélectionnez une note de 1 à 5 étoiles'); return; }
     if (!commentaire.trim()) { setError('Le commentaire est requis'); return; }
-    onSubmitAvis({ id: monAvis?.id, note, commentaire });
-    setNote(0);
-    setCommentaire('');
-    setEditing(false);
+    if (!producteur.produitId) {
+      setError("Impossible de déterminer le produit à noter : consultez un produit de ce producteur d'abord.");
+      return;
+    }
+    setEnvoiEnCours(true);
     setError('');
+    try {
+      if (monAvis) {
+        await avisApi.modifierAvis(monAvis.id, { produitId: producteur.produitId, note, commentaire });
+      } else {
+        await avisApi.publierAvis({ produitId: producteur.produitId, note, commentaire });
+      }
+      setNote(0);
+      setCommentaire('');
+      setEditing(false);
+      await chargerAvis();
+    } catch (e) {
+      setError(e?.message || "La publication de l'avis a échoué.");
+    } finally {
+      setEnvoiEnCours(false);
+    }
+  };
+
+  const handleDelete = async (avisId) => {
+    if (!window.confirm('Supprimer votre avis ?')) return;
+    setEnvoiEnCours(true);
+    setError('');
+    try {
+      await avisApi.supprimerAvis(avisId);
+      await chargerAvis();
+    } catch (e) {
+      setError(e?.message || "La suppression de l'avis a échoué.");
+    } finally {
+      setEnvoiEnCours(false);
+    }
   };
 
   const handleSubmitReport = () => {
@@ -131,7 +190,7 @@ export default function ProducerProfile({
             </div>
           </div>
           {onContactVendor && (
-            <button style={styles.contactBtn} onClick={() => onContactVendor({ name: producteur.nom })}>
+            <button style={styles.contactBtn} onClick={() => onContactVendor({ id: producteur.id, name: producteur.nom })}>
               <MessageCircle size={16} /> Contacter
             </button>
           )}
@@ -161,12 +220,16 @@ export default function ProducerProfile({
           )}
         </div>
 
+        {chargeErreur && <div style={styles.errorBanner}>{chargeErreur}</div>}
+
         <div style={styles.grid}>
 
           {/* Répartition des notes */}
           <div style={styles.distribCard}>
             <h3 style={styles.sectionTitle}>Répartition des avis</h3>
-            {totalAvis === 0 ? (
+            {chargement ? (
+              <p style={styles.hint}>Chargement des avis...</p>
+            ) : totalAvis === 0 ? (
               <p style={styles.emptyText}>Pas encore d'avis pour ce producteur.</p>
             ) : (
               <div style={styles.distribList}>
@@ -206,14 +269,20 @@ export default function ProducerProfile({
                   <StarRow value={monAvis.note} size={16} />
                   <p style={styles.myAvisComment}>{monAvis.commentaire}</p>
                   <div style={styles.myAvisActions}>
-                    <button style={styles.editBtn} onClick={() => startEdit(monAvis)}>
+                    <button style={styles.editBtn} onClick={() => startEdit(monAvis)} disabled={envoiEnCours}>
                       <Edit3 size={14} /> Modifier
                     </button>
-                    <button style={styles.deleteBtn} onClick={() => onDeleteAvis(monAvis.id)}>
+                    <button style={styles.deleteBtn} onClick={() => handleDelete(monAvis.id)} disabled={envoiEnCours}>
                       <Trash2 size={14} /> Supprimer
                     </button>
                   </div>
                 </div>
+              </div>
+            ) : !producteur.produitId ? (
+              <div style={styles.loginPrompt}>
+                <p style={styles.hint}>
+                  Consultez un produit de ce producteur pour pouvoir laisser un avis.
+                </p>
               </div>
             ) : (
               <div>
@@ -235,8 +304,8 @@ export default function ProducerProfile({
                   {editing && (
                     <button style={styles.cancelBtn} onClick={cancelEdit}>Annuler</button>
                   )}
-                  <button style={styles.submitBtn} onClick={handleSubmit}>
-                    {editing ? 'Mettre à jour' : 'Publier mon avis'}
+                  <button style={styles.submitBtn} onClick={handleSubmit} disabled={envoiEnCours}>
+                    {envoiEnCours ? 'Envoi...' : editing ? 'Mettre à jour' : 'Publier mon avis'}
                   </button>
                 </div>
               </div>
@@ -247,7 +316,9 @@ export default function ProducerProfile({
         {/* Liste des avis */}
         <div style={styles.listSection}>
           <h3 style={styles.sectionTitle}>Tous les avis ({totalAvis})</h3>
-          {totalAvis === 0 ? (
+          {chargement ? (
+            <p style={styles.hint}>Chargement des avis...</p>
+          ) : totalAvis === 0 ? (
             <p style={styles.emptyText}>Soyez le premier à laisser un avis sur ce producteur.</p>
           ) : (
             <div style={styles.avisList}>
@@ -295,6 +366,7 @@ const styles = {
   contactBtn: { display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#2d6a4f', color: '#ffffff', border: 'none', borderRadius: '14px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', flexShrink: 0 },
 
   reportRow: { marginBottom: '20px' },
+  errorBanner: { backgroundColor: '#fdecea', color: '#b3261e', fontSize: '13px', fontWeight: '600', padding: '12px 16px', borderRadius: '12px', marginBottom: '16px' },
   reportLink: { display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', color: '#adb5bd', fontSize: '12.5px', fontWeight: '700', cursor: 'pointer', padding: 0 },
   reportBox: { backgroundColor: '#fff5f2', borderRadius: '14px', padding: '16px', border: '1px solid #f5d4c8' },
   reportSubmitBtn: { padding: '12px 22px', backgroundColor: '#c0392b', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '13.5px', fontWeight: '800', cursor: 'pointer' },

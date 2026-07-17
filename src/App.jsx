@@ -7,7 +7,6 @@ import EditProduct from './components/EditProduct';
 import VendeurOrders from './components/VendeurOrders';
 import ClientOrders from './components/ClientOrders';
 import ClientPurchases from './components/ClientPurchases';
-import OrderManagement from './components/OrderManagement';
 import OrderManagementAdmin from './components/OrderManagementAdmin';
 import PasswordRecovery from './components/PasswordRecovery';
 import ProductDetail from './components/ProductDetail';
@@ -24,7 +23,6 @@ import VendorVerificationAdmin from './components/VendorVerificationAdmin';
 import ProducerProfile from './components/ProducerProfile';
 import ProductCatalog from './components/ProductCatalog';
 import AdminDashboard from './components/AdminDashboard';
-import CheckoutWizard from './components/CheckoutWizard';
 import EditProfile from './components/EditProfile';
 import FAQPage from './components/FAQPage';
 import LoginPage from './components/LoginPage';
@@ -34,6 +32,11 @@ import MyProducts from './components/MyProducts';
 import NotificationsCenter from './components/NotificationsCenter';
 import OrderDetailAdmin from './components/OrderDetailAdmin';
 import ChangePassword from './components/ChangePassword';
+import { authApi, utilisateurApi, produitApi, signalementApi, commandeApi, paiementApi, getSession } from './services/api';
+import { ROLE_FRONTEND_TO_BACKEND, joinNomComplet, mapProfileToFrontendUser } from './services/userMapping';
+import { mapProduitPourVendeur, construireProduitRequest } from './services/productMapping';
+import { mapSignalementPourAffichage, construireRaison, TYPE_FRONTEND_TO_BACKEND } from './services/signalementMapping';
+import { mapCommandePourAffichage, STATUT_FRANCAIS_TO_BACKEND } from './services/commandeMapping';
 
 export default function App() {
   const [screen, setScreen] = useState('home');
@@ -66,22 +69,26 @@ export default function App() {
   };
 
   // ===== COMPTE ADMIN =====
-  const ADMIN_ACCOUNTS = [
-    { id: 'admin-1', role: 'admin', prenom: 'Admin', nom: 'AgroMarket', email: 'admin@agromarket.cm', password: 'admin123', photo: null },
-  ];
+  // NOTE : il n'y a plus de compte admin codé en dur ici. La connexion admin
+  // passe désormais par le vrai backend (auth-service). Un compte avec le
+  // rôle ADMIN doit exister dans la base de utilisateur-service (créé via
+  // POST /api/utilisateurs/admin/creer par un autre admin, ou directement
+  // en base pour le tout premier compte).
 
   // ===== AUTRES ÉTATS =====
   const [showSignalement, setShowSignalement] = useState(false);
   const [signalementProduct, setSignalementProduct] = useState(null);
-  const [certificationStatus, setCertificationStatus] = useState('none');
   const [activePlan, setActivePlan] = useState('gratuit');
   const [vendeurProducts, setVendeurProducts] = useState([]);
   const [vendorVerifications, setVendorVerifications] = useState([]);
-  const [avisList, setAvisList] = useState([]);
   const [cartItems, setCartItems] = useState([]);
   const [authRedirectMessage, setAuthRedirectMessage] = useState('');
   const [signalements, setSignalements] = useState([]);
   const [adminOrders, setAdminOrders] = useState([]);
+  // Vraies commandes issues de commande-service (remplacent progressivement
+  // adminOrders, gardé pour les écrans admin hors de mon périmètre).
+  const [mesCommandes, setMesCommandes] = useState([]);
+  const [toutesLesCommandes, setToutesLesCommandes] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null);
   const [isClientMode, setIsClientMode] = useState(false);
 
@@ -91,38 +98,43 @@ export default function App() {
     if (savedUsers) { try { setRegisteredUsers(JSON.parse(savedUsers)); } catch {} }
     const savedCart = localStorage.getItem('cartItems');
     if (savedCart) { try { setCartItems(JSON.parse(savedCart)); } catch {} }
-    const savedProducts = localStorage.getItem('vendeurProducts');
-    if (savedProducts) { try { setVendeurProducts(JSON.parse(savedProducts)); } catch {} }
     const savedVerifications = localStorage.getItem('vendorVerifications');
     if (savedVerifications) { try { setVendorVerifications(JSON.parse(savedVerifications)); } catch {} }
-    const savedAvis = localStorage.getItem('avisList');
-    if (savedAvis) { try { setAvisList(JSON.parse(savedAvis)); } catch {} }
     const savedSignalements = localStorage.getItem('signalements');
     if (savedSignalements) { try { setSignalements(JSON.parse(savedSignalements)); } catch {} }
     const savedOrders = localStorage.getItem('adminOrders');
     if (savedOrders) { try { setAdminOrders(JSON.parse(savedOrders)); } catch {} }
-    const storedUser = localStorage.getItem('currentUser');
-    if (storedUser) { try { setCurrentUser(JSON.parse(storedUser)); } catch {} }
     const savedNotifs = localStorage.getItem('notifications');
     if (savedNotifs) { try { setNotifications(JSON.parse(savedNotifs)); } catch {} }
     const savedPlan = localStorage.getItem('activePlan');
     if (savedPlan) { setActivePlan(savedPlan); }
     const savedClientMode = localStorage.getItem('isClientMode');
     if (savedClientMode) { setIsClientMode(JSON.parse(savedClientMode)); }
+
+    // Restaurer la session utilisateur à partir du token JWT stocké,
+    // en revérifiant le profil auprès du backend (utilisateur-service)
+    // plutôt que de faire confiance à une copie locale potentiellement
+    // périmée.
+    const session = getSession();
+    if (session) {
+      utilisateurApi
+        .getUtilisateurById(session.uid)
+        .then((profile) => {
+          setCurrentUser(mapProfileToFrontendUser(profile, session.roles));
+        })
+        .catch(() => {
+          // Token invalide/expiré ou utilisateur supprimé : on nettoie la session.
+          authApi.logout();
+        });
+    }
   }, []);
 
   // ===== SAUVEGARDE =====
   useEffect(() => { localStorage.setItem('registeredUsers', JSON.stringify(registeredUsers)); }, [registeredUsers]);
   useEffect(() => { localStorage.setItem('cartItems', JSON.stringify(cartItems)); }, [cartItems]);
-  useEffect(() => { localStorage.setItem('vendeurProducts', JSON.stringify(vendeurProducts)); }, [vendeurProducts]);
   useEffect(() => { localStorage.setItem('vendorVerifications', JSON.stringify(vendorVerifications)); }, [vendorVerifications]);
-  useEffect(() => { localStorage.setItem('avisList', JSON.stringify(avisList)); }, [avisList]);
   useEffect(() => { localStorage.setItem('signalements', JSON.stringify(signalements)); }, [signalements]);
   useEffect(() => { localStorage.setItem('adminOrders', JSON.stringify(adminOrders)); }, [adminOrders]);
-  useEffect(() => {
-    if (currentUser) localStorage.setItem('currentUser', JSON.stringify(currentUser));
-    else localStorage.removeItem('currentUser');
-  }, [currentUser]);
   useEffect(() => { localStorage.setItem('notifications', JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem('activePlan', activePlan); }, [activePlan]);
   useEffect(() => { localStorage.setItem('isClientMode', JSON.stringify(isClientMode)); }, [isClientMode]);
@@ -133,6 +145,160 @@ export default function App() {
       setActivePlan(currentUser.plan || 'gratuit');
     }
   }, [currentUser]);
+
+  // ===== PRODUITS DU VENDEUR CONNECTÉ =====
+  // Remplace l'ancien stockage local : on va chercher les vrais produits
+  // du vendeur auprès de produit-service dès qu'un vendeur est connecté.
+  const refreshVendeurProducts = async () => {
+    if (!currentUser || currentUser.role !== 'vendeur') return;
+    try {
+      const data = await produitApi.getMesProduits();
+      setVendeurProducts((data || []).map(mapProduitPourVendeur));
+    } catch (err) {
+      console.error('Impossible de charger vos produits :', err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.role === 'vendeur') {
+      refreshVendeurProducts();
+    } else {
+      setVendeurProducts([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role]);
+
+  // ===== SIGNALEMENTS (modération admin) =====
+  // Remplace l'ancien stockage local : on va chercher les vrais
+  // signalements auprès de signalement-service, puis on résout le nom
+  // affichable de la cible (produit ou utilisateur) et de l'auteur,
+  // car le backend ne stocke que des IDs.
+  const chargerSignalements = async () => {
+    try {
+      const dtos = await signalementApi.getAllSignalements();
+      const enrichis = await Promise.all(
+        (dtos || []).map(async (dto) => {
+          let cibleNom;
+          try {
+            if (dto.type === 'PRODUIT') {
+              const produit = await produitApi.getProduitById(dto.targetId);
+              cibleNom = produit?.nom;
+            } else {
+              const utilisateur = await utilisateurApi.getUtilisateurById(dto.targetId);
+              cibleNom = utilisateur?.nom;
+            }
+          } catch {
+            cibleNom = undefined; // cible supprimée entretemps : on garde l'ID en repli
+          }
+          let auteurNom;
+          try {
+            const reporter = await utilisateurApi.getUtilisateurById(dto.reporterId);
+            auteurNom = reporter?.nom;
+          } catch {
+            auteurNom = undefined;
+          }
+          return mapSignalementPourAffichage(dto, cibleNom, auteurNom);
+        })
+      );
+      setSignalements(enrichis);
+    } catch (err) {
+      console.error('Impossible de charger les signalements :', err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.role === 'admin') {
+      chargerSignalements();
+      chargerUtilisateurs();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role]);
+
+  // ===== UTILISATEURS (liste admin) =====
+  // Remplace l'ancien stockage local/localStorage : liste réelle depuis
+  // utilisateur-service pour le dashboard admin (comptage, blocage...).
+  const chargerUtilisateurs = async () => {
+    try {
+      const dtos = await utilisateurApi.getAllUtilisateurs();
+      setRegisteredUsers((dtos || []).map((dto) => mapProfileToFrontendUser(dto, [dto.role])));
+    } catch (err) {
+      console.error('Impossible de charger les utilisateurs :', err);
+    }
+  };
+
+  // ===== COMMANDES (commande-service) =====
+  // commande-service ne renvoie que des IDs (produitId, clientId) : on
+  // résout les noms de produits (et, pour le vendeur, les noms de clients)
+  // avant de transmettre aux écrans, qui attendent déjà ce format enrichi
+  // (voir commandeMapping.js).
+  const resoudreNomsProduits = async (commandes) => {
+    const idsUniques = [...new Set(
+      commandes.flatMap((c) => (c.lignesCommande || []).map((lc) => lc.produitId))
+    )];
+    const noms = new Map();
+    await Promise.all(idsUniques.map(async (id) => {
+      try {
+        const produit = await produitApi.getProduitById(id);
+        noms.set(id, produit?.nom);
+      } catch {
+        // produit supprimé entretemps : on gardera le repli "Produit #id"
+      }
+    }));
+    return noms;
+  };
+
+  const chargerMesCommandes = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const dtos = await commandeApi.getCommandesByClientId(currentUser.id);
+      const noms = await resoudreNomsProduits(dtos || []);
+      const nomClient = joinNomComplet(currentUser.prenom, currentUser.nom);
+      setMesCommandes((dtos || []).map((dto) => mapCommandePourAffichage(dto, nomClient, currentUser.email, noms)));
+    } catch (err) {
+      console.error('Impossible de charger vos commandes :', err);
+    }
+  };
+
+  const chargerToutesLesCommandes = async () => {
+    try {
+      const dtos = await commandeApi.getAllCommandes();
+      const noms = await resoudreNomsProduits(dtos || []);
+      const idsClientsUniques = [...new Set((dtos || []).map((c) => c.clientId))];
+      const clients = new Map();
+      await Promise.all(idsClientsUniques.map(async (id) => {
+        try {
+          const utilisateur = await utilisateurApi.getUtilisateurById(id);
+          clients.set(id, utilisateur);
+        } catch {
+          // client supprimé entretemps : on gardera le repli "Client #id"
+        }
+      }));
+      setToutesLesCommandes((dtos || []).map((dto) => {
+        const client = clients.get(dto.clientId);
+        return mapCommandePourAffichage(dto, client?.nom, client?.email, noms);
+      }));
+    } catch (err) {
+      console.error('Impossible de charger les commandes :', err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.role === 'client') {
+      chargerMesCommandes();
+    } else {
+      setMesCommandes([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role]);
+
+  useEffect(() => {
+    if (currentUser?.role === 'vendeur') {
+      chargerToutesLesCommandes();
+    } else {
+      setToutesLesCommandes([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role]);
 
   // ===== GARDE AUTH =====
   const requireLogin = (action) => {
@@ -186,6 +352,65 @@ export default function App() {
     );
   };
 
+  // ===== VALIDATION DE COMMANDE (commande-service + paiement-service) =====
+  // Remplace l'ancienne commande 100% locale : crée la vraie commande, puis
+  // le vrai paiement si le moyen choisi est supporté par paiement-service
+  // (MethodePaiement n'a que ORANGE_MONEY / MOBILE_MONEY, pas de carte
+  // bancaire pour l'instant). On garde en plus l'ancienne mise à jour
+  // locale de adminOrders : SellerDashboard, AdminDashboard et
+  // OrderManagementAdmin (hors de mon périmètre) en dépendent encore.
+  const handleCheckout = async ({ paymentMethod, paymentData } = {}) => {
+    try {
+      const lignesCommande = cartItems.map(item => ({
+        produitId: item.id,
+        quantite: item.quantity,
+        prixUnitaire: item.price,
+      }));
+      const commande = await commandeApi.createCommande({
+        clientId: currentUser.id,
+        lignesCommande,
+      });
+
+      const methode = paymentMethod === 'orange-money' ? 'ORANGE_MONEY'
+        : paymentMethod === 'mtn-money' ? 'MOBILE_MONEY'
+        : paymentMethod === 'carte' ? 'CARTE'
+        : null;
+
+      if (methode) {
+        await paiementApi.creerPaiement({
+          commandeId: commande.id,
+          consommateurId: currentUser.id,
+          montant: commande.montantTotal,
+          methode,
+          numeroPaiement: paymentData,
+        });
+      }
+
+      const newOrder = {
+        id: commande.id,
+        id_client: currentUser.id,
+        client: joinNomComplet(currentUser?.prenom, currentUser?.nom) || 'Client',
+        amount: commande.montantTotal,
+        status: 'En attente',
+        date: new Date().toLocaleDateString('fr-FR'),
+        items: cartItems.map(item => ({
+          nomProduit: item.name,
+          quantity: item.quantity,
+          prixUnitaire: item.price,
+          subtotal: item.price * item.quantity,
+        })),
+      };
+      setAdminOrders(prev => [...prev, newOrder]);
+      addNotification(1, 'info', `Nouvelle commande #${commande.id} de ${newOrder.client}`, '/admin/order-management-admin');
+      addNotification(currentUser.id, 'success', `Commande #${commande.id} confirmée !`, '/orders');
+      setCartItems([]);
+      await chargerMesCommandes();
+      navigate('orders');
+    } catch (err) {
+      alert(err?.message || "La création de la commande a échoué.");
+    }
+  };
+
   const openSignalement = (product) => {
     requireLogin(() => {
       setSignalementProduct(product);
@@ -215,19 +440,20 @@ export default function App() {
   };
 
   // ===== CONNEXION =====
-  const validateLogin = (email, password, role) => {
-    const admin = ADMIN_ACCOUNTS.find(
-      u => u.email.toLowerCase() === email.toLowerCase() && u.password === password
-    );
-    if (admin) return admin;
+  // Appelle le vrai backend (auth-service + utilisateur-service).
+  // Retourne l'utilisateur (au format frontend) en cas de succès,
+  // ou lève une erreur avec un message lisible en cas d'échec.
+  const validateLogin = async (email, password, uiRole) => {
+    const authResponse = await authApi.login(email, password);
+    const expectedBackendRole = ROLE_FRONTEND_TO_BACKEND[uiRole];
 
-    const found = registeredUsers.find(
-      u => u.email.toLowerCase() === email.toLowerCase() &&
-           u.password === password &&
-           u.role === role
-    );
-    if (!found) return null;
-    return found;
+    if (!authResponse.roles?.includes(expectedBackendRole)) {
+      authApi.logout();
+      throw new Error(`Aucun compte ${uiRole} trouvé avec ces identifiants.`);
+    }
+
+    const profile = await utilisateurApi.getUtilisateurById(authResponse.uid);
+    return mapProfileToFrontendUser(profile, authResponse.roles);
   };
 
   const handleLoginSuccess = (userData) => {
@@ -248,8 +474,8 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    authApi.logout();
     setCurrentUser(null);
-    localStorage.removeItem('currentUser');
     setIsClientMode(false);
     setScreen('home');
   };
@@ -268,27 +494,24 @@ export default function App() {
   };
 
   // ===== INSCRIPTION =====
-  const handleRegisterSuccess = ({ role, prenom, nom, email, telephone, password, photo }) => {
-    const newUser = {
-      id: `user-${Date.now()}`,
-      role,
-      prenom,
-      nom,
+  // Crée le compte auprès de utilisateur-service, puis connecte
+  // automatiquement l'utilisateur (auth-service) pour récupérer un token.
+  const handleRegisterSuccess = async ({ role, prenom, nom, email, telephone, password, photo }) => {
+    await utilisateurApi.createUtilisateur({
+      nom: joinNomComplet(prenom, nom),
       email,
+      motDePasse: password,
       telephone,
-      password,
       photo: photo || null,
-      actif: true,
-      dateInscription: new Date().toISOString(),
-      plan: 'gratuit',
-      verificationStatus: 'approved',
-    };
-    setRegisteredUsers(prev => [...prev, newUser]);
-    setActivePlan('gratuit');
+      role: ROLE_FRONTEND_TO_BACKEND[role],
+    });
+
+    const newUser = await validateLogin(email, password, role);
 
     addNotification(1, 'info', `Nouvel utilisateur inscrit : ${prenom} ${nom} (${role})`, '/admin/dashboard');
     addNotification(newUser.id, 'success', `Bienvenue ${prenom} ! Votre compte a été créé.`, '/profil');
 
+    setActivePlan(newUser.plan);
     setCurrentUser(newUser);
     if (role === 'vendeur') {
       setScreen('seller-dashboard');
@@ -298,6 +521,10 @@ export default function App() {
   };
 
   // ===== GESTION DES PRODUITS =====
+  // AddProduct.jsx et EditProduct.jsx appellent désormais produitApi
+  // eux-mêmes ; ici on se contente de répercuter le résultat dans l'état
+  // local pour un retour visuel immédiat sur les autres écrans (StockAlerts,
+  // SellerDashboard...) qui partagent tous vendeurProducts.
   const handleAddProduct = (newProduct) => {
     setVendeurProducts(prev => [...prev, newProduct]);
     navigate('my-products');
@@ -316,44 +543,63 @@ export default function App() {
     navigate('my-products');
   };
 
-  const handleDeleteProduct = (id) => {
+  const handleDeleteProduct = async (id) => {
+    const previous = vendeurProducts;
     setVendeurProducts(prev => prev.filter(p => p.id !== id));
+    try {
+      await produitApi.supprimerProduit(id);
+    } catch (err) {
+      alert(err?.message || 'La suppression du produit a échoué.');
+      setVendeurProducts(previous); // on annule le changement optimiste si l'appel échoue
+    }
   };
 
-  const handleDuplicateProduct = (product) => {
-    setVendeurProducts(prev => [
-      ...prev,
-      { ...product, id: Date.now(), name: `${product.name} (Copie)`, sales: 0 },
-    ]);
+  const handleDuplicateProduct = async (product) => {
+    try {
+      const request = construireProduitRequest({
+        nom: `${product.name} (Copie)`,
+        description: product.description,
+        prix: product.price,
+        stock: product.stock,
+        imageUrl: product.imageUrl,
+        categorieId: product.categoryId,
+        localisation: product.localisation,
+      });
+      const produitCree = await produitApi.publierProduit(request);
+      setVendeurProducts(prev => [...prev, mapProduitPourVendeur(produitCree)]);
+    } catch (err) {
+      alert(err?.message || 'La duplication du produit a échoué.');
+    }
   };
 
   // ===== APPROBATION / REJET =====
   const handleApproveVerification = (id) => {};
   const handleRejectVerification = (id) => {};
-  const handleToggleUserBlocked = (userId) => {
-    setRegisteredUsers(prev => prev.map(u => u.id === userId ? { ...u, blocked: !u.blocked } : u));
-  };
-
-  const handleSignalerProducteur = (producteur, motif) => {
-    setSignalements(prev => [
-      ...prev,
-      { id: `sig-${Date.now()}`, type: 'utilisateur', cible: producteur.nom, motif, auteur: currentUser?.prenom || 'Client', date: new Date().toISOString(), status: 'pending' },
-    ]);
-    addNotification(1, 'error', `Signalement de ${producteur.nom} par ${currentUser?.prenom || 'un client'}`, '/admin/moderation-panel');
-  };
-
-  const handleSubmitAvis = ({ id, note, commentaire }) => {
-    if (id) {
-      setAvisList(prev => prev.map(a => a.id === id ? { ...a, note, commentaire, date: new Date().toISOString() } : a));
-    } else {
-      setAvisList(prev => [
-        ...prev,
-        { id: `avis-${Date.now()}`, id_client: currentUser?.id ?? currentUser?.email ?? 'client-anonyme', id_producteur: selectedVendor?.id, clientNom: currentUser?.prenom || 'Client', note, commentaire, date: new Date().toISOString() },
-      ]);
+  const handleToggleUserBlocked = async (userId) => {
+    const user = registeredUsers.find(u => u.id === userId);
+    if (!user) return;
+    try {
+      await utilisateurApi.changerStatutBlocage(userId, !user.blocked);
+      await chargerUtilisateurs();
+    } catch (err) {
+      alert(err?.message || "Le changement de statut a échoué.");
     }
   };
 
-  const handleDeleteAvis = (avisId) => setAvisList(prev => prev.filter(a => a.id !== avisId));
+  const handleSignalerProducteur = async (producteur, motif) => {
+    try {
+      await signalementApi.createSignalement({
+        type: TYPE_FRONTEND_TO_BACKEND.utilisateur,
+        targetId: producteur.id,
+        reporterId: currentUser.id,
+        raison: motif,
+      });
+      addNotification(1, 'error', `Signalement de ${producteur.nom} par ${currentUser?.prenom || 'un client'}`, '/admin/moderation-panel');
+      if (currentUser?.role === 'admin') await chargerSignalements();
+    } catch (err) {
+      alert(err?.message || "L'envoi du signalement a échoué.");
+    }
+  };
 
   // ===== NAVIGATION =====
   const goToProduct = (product) => { setSelectedProduct(product); setScreen('product-detail'); };
@@ -489,26 +735,7 @@ export default function App() {
           cartItems={cartItems}
           onRemoveItem={removeFromCart}
           onUpdateQuantity={updateCartItemQuantity}
-          onCheckout={() => {
-            const newOrder = {
-              id: `CMD-${Date.now()}`,
-              client: currentUser?.prenom + ' ' + currentUser?.nom || 'Client',
-              amount: cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-              status: 'En attente',
-              date: new Date().toLocaleDateString('fr-FR'),
-              items: cartItems.map(item => ({
-                nomProduit: item.name,
-                quantity: item.quantity,
-                prixUnitaire: item.price,
-                subtotal: item.price * item.quantity,
-              })),
-            };
-            setAdminOrders(prev => [...prev, newOrder]);
-            addNotification(1, 'info', `Nouvelle commande #${newOrder.id} de ${newOrder.client}`, '/admin/order-management-admin');
-            addNotification(currentUser.id, 'success', `Commande #${newOrder.id} confirmée !`, '/orders');
-            setCartItems([]);
-            navigate('orders');
-          }}
+          onCheckout={handleCheckout}
           onContinueShopping={() => navigate('home')}
         />;
       case 'checkout-wizard':
@@ -516,40 +743,21 @@ export default function App() {
           cartItems={cartItems}
           onRemoveItem={removeFromCart}
           onUpdateQuantity={updateCartItemQuantity}
-          onCheckout={() => {
-            const newOrder = {
-              id: `CMD-${Date.now()}`,
-              client: currentUser?.prenom + ' ' + currentUser?.nom || 'Client',
-              amount: cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-              status: 'En attente',
-              date: new Date().toLocaleDateString('fr-FR'),
-              items: cartItems.map(item => ({
-                nomProduit: item.name,
-                quantity: item.quantity,
-                prixUnitaire: item.price,
-                subtotal: item.price * item.quantity,
-              })),
-            };
-            setAdminOrders(prev => [...prev, newOrder]);
-            addNotification(1, 'info', `Nouvelle commande #${newOrder.id} de ${newOrder.client}`, '/admin/order-management-admin');
-            addNotification(currentUser.id, 'success', `Commande #${newOrder.id} confirmée !`, '/orders');
-            setCartItems([]);
-            navigate('orders');
-          }}
+          onCheckout={handleCheckout}
           onContinueShopping={() => navigate('home')}
         />;
       case 'orders':
         return <ClientOrders
-          orders={adminOrders.filter(o => o.id_client === currentUser?.id)}
+          orders={mesCommandes}
           onBackHome={() => navigate('home')}
         />;
       case 'purchases':
         return <ClientPurchases
-          orders={adminOrders.filter(o => o.id_client === currentUser?.id)}
+          orders={mesCommandes}
           onBackHome={() => navigate('home')}
         />;
       case 'message':
-        return <MessagePage vendor={selectedVendor} onBack={() => navigate('product-detail')} />;
+        return <MessagePage vendor={selectedVendor} currentUser={currentUser} onBack={() => navigate('product-detail')} />;
       case 'user-profile':
         return <UserProfile
           currentUser={currentUser}
@@ -561,21 +769,40 @@ export default function App() {
         return <EditProfile
           currentUser={currentUser}
           onBack={() => navigate('user-profile')}
-          onSave={(updatedData) => {
-            const updatedUser = { ...currentUser, ...updatedData };
-            setCurrentUser(updatedUser);
-            setRegisteredUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
-            navigate('user-profile');
+          onSave={async (updatedData) => {
+            // Appelle utilisateur-service (PUT /api/utilisateurs/{id}) au lieu
+            // de ne mettre à jour que l'état local. Le backend n'a qu'un seul
+            // champ "nom" : on recombine prenom + nom avec joinNomComplet.
+            try {
+              const profileDto = await utilisateurApi.updateProfil(currentUser.id, {
+                nom: joinNomComplet(updatedData.prenom, updatedData.nom),
+                email: updatedData.email,
+                telephone: updatedData.telephone,
+                photo: updatedData.photo,
+                adresse: currentUser.adresse || '',
+              });
+              const updatedUser = mapProfileToFrontendUser(
+                profileDto,
+                [ROLE_FRONTEND_TO_BACKEND[currentUser.role]]
+              );
+              setCurrentUser(updatedUser);
+              setRegisteredUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+              navigate('user-profile');
+            } catch (err) {
+              alert(err?.message || 'La mise à jour du profil a échoué.');
+            }
           }}
         />;
       case 'change-password':
         return <ChangePassword
           currentUser={currentUser}
           onBack={() => navigate('user-profile')}
-          onSave={(newPassword) => {
-            const updatedUser = { ...currentUser, password: newPassword };
-            setCurrentUser(updatedUser);
-            setRegisteredUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+          onSave={async (currentPassword, newPassword) => {
+            // Appelle utilisateur-service (PUT /api/utilisateurs/{id}/mot-de-passe).
+            // Le backend vérifie lui-même l'ancien mot de passe ; en cas
+            // d'erreur, on laisse l'exception remonter jusqu'à ChangePassword
+            // pour qu'elle affiche le message sur le champ concerné.
+            await utilisateurApi.changerMotDePasse(currentUser.id, currentPassword, newPassword);
             addNotification(currentUser.id, 'info', 'Votre mot de passe a été modifié avec succès.', null);
           }}
         />;
@@ -650,9 +877,7 @@ export default function App() {
         />;
       case 'certification':
         return <CertificationRequest
-          currentStatus={certificationStatus}
           onBack={() => navigate('seller-dashboard')}
-          onSubmit={() => setCertificationStatus('pending')}
         />;
       case 'admin-dashboard':
         return <AdminDashboard
@@ -681,13 +906,23 @@ export default function App() {
       case 'moderation-panel':
         return <ModerationPanel
           signalements={signalements}
-          onResolve={(id) => {
-            setSignalements(prev => prev.map(s => s.id === id ? { ...s, status: 'résolu' } : s));
-            addNotification(1, 'info', `Signalement résolu`, '/admin/moderation-panel');
+          onResolve={async (id) => {
+            try {
+              await signalementApi.updateStatutSignalement(id, 'RESOLU');
+              addNotification(1, 'info', `Signalement résolu`, '/admin/moderation-panel');
+              await chargerSignalements();
+            } catch (err) {
+              alert(err?.message || "La mise à jour du signalement a échoué.");
+            }
           }}
-          onReject={(id) => {
-            setSignalements(prev => prev.map(s => s.id === id ? { ...s, status: 'rejeté' } : s));
-            addNotification(1, 'info', `Signalement rejeté`, '/admin/moderation-panel');
+          onReject={async (id) => {
+            try {
+              await signalementApi.updateStatutSignalement(id, 'REJETE');
+              addNotification(1, 'info', `Signalement rejeté`, '/admin/moderation-panel');
+              await chargerSignalements();
+            } catch (err) {
+              alert(err?.message || "La mise à jour du signalement a échoué.");
+            }
           }}
           onBack={() => navigate('admin-dashboard')}
         />;
@@ -701,10 +936,7 @@ export default function App() {
       case 'producer-profile':
         return <ProducerProfile
           producteur={selectedVendor}
-          avisList={avisList}
           currentUser={currentUser}
-          onSubmitAvis={handleSubmitAvis}
-          onDeleteAvis={handleDeleteAvis}
           onBack={() => navigate('product-detail')}
           onContactVendor={goToMessage}
           onNavigateToLogin={() => navigate('login-page')}
@@ -712,13 +944,17 @@ export default function App() {
         />;
       case 'vendeur-orders':
         return <VendeurOrders
-          orders={adminOrders}
+          orders={toutesLesCommandes}
           vendeurProducts={vendeurProducts}
-          onUpdateOrderStatus={(orderId, newStatus) => {
-            setAdminOrders(prev =>
-              prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o)
-            );
-            addNotification(1, 'info', `Statut de la commande #${orderId} mis à jour : ${newStatus}`, '/admin/order-management-admin');
+          onUpdateOrderStatus={async (orderId, newStatus) => {
+            try {
+              const statutBackend = STATUT_FRANCAIS_TO_BACKEND[newStatus] || newStatus;
+              await commandeApi.updateStatutCommande(orderId, statutBackend);
+              addNotification(1, 'info', `Statut de la commande #${orderId} mis à jour : ${newStatus}`, '/admin/order-management-admin');
+              await chargerToutesLesCommandes();
+            } catch (err) {
+              alert(err?.message || "La mise à jour du statut de la commande a échoué.");
+            }
           }}
         />;
       default:
@@ -755,16 +991,19 @@ export default function App() {
         <SignalementModal
           product={signalementProduct}
           onClose={() => { setShowSignalement(false); setSignalementProduct(null); }}
-          onSubmit={(data) => {
-            const newSig = {
-              id: `sig-${Date.now()}`,
-              ...data,
-              auteur: currentUser?.prenom || 'Client',
-              date: new Date().toISOString(),
-              status: 'pending',
-            };
-            setSignalements(prev => [...prev, newSig]);
-            addNotification(1, 'error', `Nouveau signalement de ${newSig.cible} par ${newSig.auteur}`, '/admin/moderation-panel');
+          onSubmit={async (data) => {
+            try {
+              await signalementApi.createSignalement({
+                type: TYPE_FRONTEND_TO_BACKEND.produit,
+                targetId: signalementProduct.id,
+                reporterId: currentUser.id,
+                raison: construireRaison(data.motif, data.commentaire),
+              });
+              addNotification(1, 'error', `Nouveau signalement de ${data.cible} par ${currentUser?.prenom || 'Client'}`, '/admin/moderation-panel');
+              if (currentUser?.role === 'admin') await chargerSignalements();
+            } catch (err) {
+              alert(err?.message || "L'envoi du signalement a échoué.");
+            }
           }}
         />
       )}

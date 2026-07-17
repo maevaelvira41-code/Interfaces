@@ -1,52 +1,107 @@
-import React, { useState, useRef } from 'react';
-import { ArrowLeft, Upload, FileText, CheckCircle, X, Shield, Clock, AlertCircle, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, CheckCircle, X, Shield, Clock, AlertCircle, XCircle, Image as ImageIcon } from 'lucide-react';
+import { certificationApi } from '../services/api';
 
-export default function CertificationRequest({ onBack, currentStatus = 'none' }) {
-  // currentStatus: 'none' | 'pending' | 'approved' | 'rejected'
-  const [status, setStatus] = useState(currentStatus);
+// Durées proposées et montant correspondant (FCFA). Le backend accepte
+// n'importe quel montant envoyé par le client (pas de grille tarifaire
+// côté serveur), donc cette grille reste indicative côté frontend.
+const DUREES = [
+  { mois: 3, montant: 2000 },
+  { mois: 6, montant: 3500 },
+  { mois: 12, montant: 6000 },
+];
 
-  const [form, setForm] = useState({
-    farmName: '',
-    location: '',
-    yearsActive: '',
-    description: '',
-  });
+const TYPES_DOCUMENT = [
+  { value: 'CARTE_IDENTITE', label: "Carte d'identité" },
+  { value: 'PASSEPORT', label: 'Passeport' },
+  { value: 'PERMIS_CONDUIRE', label: 'Permis de conduire' },
+  { value: 'RECIPISSE', label: 'Récépissé' },
+];
 
-  const [documents, setDocuments] = useState([]);
-  const [photos, setPhotos] = useState([]);
-  const docInputRef = useRef(null);
-  const photoInputRef = useRef(null);
+const readAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = (ev) => resolve(ev.target.result);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+export default function CertificationRequest({ onBack }) {
+  // certification: dernière demande du producteur (ou null si aucune)
+  const [certification, setCertification] = useState(null);
+  const [paymentInfo, setPaymentInfo] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const handleDocUpload = (e) => {
-    const files = Array.from(e.target.files);
-    const newDocs = files.map(f => ({ name: f.name, size: (f.size / 1024).toFixed(0) + ' KB' }));
-    setDocuments(prev => [...prev, ...newDocs]);
+  const [typeDocument, setTypeDocument] = useState('CARTE_IDENTITE');
+  const [idRecto, setIdRecto] = useState(null);
+  const [idVerso, setIdVerso] = useState(null);
+  const [photoUtilisateur, setPhotoUtilisateur] = useState(null);
+  const [dureeMois, setDureeMois] = useState(DUREES[0].mois);
+  const [moyenPaiement, setMoyenPaiement] = useState('MTN_MOMO');
+  const [numeroPaiement, setNumeroPaiement] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const rectoRef = useRef(null);
+  const versoRef = useRef(null);
+  const photoRef = useRef(null);
+
+  useEffect(() => {
+    Promise.all([certificationApi.getMesCertifications(), certificationApi.getPaymentInformation()])
+      .then(([mesCertifications, infos]) => {
+        // On affiche la demande la plus récente s'il y en a une.
+        const derniere = [...mesCertifications].sort(
+          (a, b) => new Date(b.dateDemande) - new Date(a.dateDemande)
+        )[0];
+        setCertification(derniere || null);
+        setPaymentInfo(infos);
+      })
+      .catch((err) => setError(err.message || 'Impossible de charger votre statut de certification'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleUpload = (setter) => async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setter(await readAsDataUrl(file));
   };
 
-  const handlePhotoUpload = (e) => {
-    const files = Array.from(e.target.files);
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (ev) => setPhotos(prev => [...prev, ev.target.result]);
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const removeDoc = (idx) => setDocuments(prev => prev.filter((_, i) => i !== idx));
-  const removePhoto = (idx) => setPhotos(prev => prev.filter((_, i) => i !== idx));
+  const montantSelectionne = DUREES.find(d => d.mois === dureeMois)?.montant || 0;
+  const numeroReception = paymentInfo.find(p => p.operateur === moyenPaiement)?.numeroPaiement;
 
   const handleSubmit = () => {
-    if (!form.farmName || !form.location || documents.length === 0) {
-      alert('Veuillez remplir les champs obligatoires et ajouter au moins un document.');
+    if (!idRecto || !idVerso || !photoUtilisateur || !numeroPaiement.trim()) {
+      setError("Veuillez fournir le recto/verso de votre pièce, votre photo, et le numéro utilisé pour le paiement.");
       return;
     }
-    setStatus('pending');
+    setError('');
+    setSubmitting(true);
+    certificationApi.soumettreCertification({
+      typeDocument,
+      idRecto,
+      idVerso,
+      photoUtilisateur,
+      dureeMois,
+      montant: montantSelectionne,
+      moyenPaiement,
+      numeroPaiement: numeroPaiement.trim(),
+    })
+      .then((response) => setCertification(response))
+      .catch((err) => setError(err.message || "Échec de l'envoi de la demande de certification"))
+      .finally(() => setSubmitting(false));
   };
 
+  if (loading) {
+    return (
+      <div style={styles.wrapper}>
+        <div style={styles.statusCard}>
+          <p style={styles.statusText}>Chargement de votre statut de certification...</p>
+        </div>
+      </div>
+    );
+  }
+
   // ===== STATUT : EN ATTENTE =====
-  if (status === 'pending') {
+  if (certification && certification.statut === 'EN_ATTENTE') {
     return (
       <div style={styles.wrapper}>
         <div style={styles.statusCard}>
@@ -56,20 +111,22 @@ export default function CertificationRequest({ onBack, currentStatus = 'none' })
           <h2 style={styles.statusTitle}>Demande en cours d'examen ⏳</h2>
           <p style={styles.statusText}>
             Votre demande de certification a été envoyée avec succès.<br />
-            Notre équipe l'examine et vous recevrez une réponse sous <strong>2 à 5 jours ouvrés</strong>.
+            Notre équipe l'examine dès que le paiement est confirmé.
           </p>
           <div style={styles.statusDetails}>
             <div style={styles.statusRow}>
-              <span style={styles.statusLabel}>Ferme</span>
-              <span style={styles.statusValue}>{form.farmName}</span>
+              <span style={styles.statusLabel}>Durée demandée</span>
+              <span style={styles.statusValue}>{certification.dureeMois} mois</span>
             </div>
             <div style={styles.statusRow}>
-              <span style={styles.statusLabel}>Localisation</span>
-              <span style={styles.statusValue}>{form.location}</span>
+              <span style={styles.statusLabel}>Montant</span>
+              <span style={styles.statusValue}>{certification.montant} FCFA</span>
             </div>
             <div style={styles.statusRow}>
-              <span style={styles.statusLabel}>Documents soumis</span>
-              <span style={styles.statusValue}>{documents.length} fichier(s)</span>
+              <span style={styles.statusLabel}>Statut du paiement</span>
+              <span style={styles.statusValue}>
+                {certification.statutPaiement === 'PAYE' ? 'Payé ✅' : certification.statutPaiement === 'NON_PAYE' ? 'Non payé ❌' : 'En attente de confirmation'}
+              </span>
             </div>
           </div>
           <button style={styles.backToStatusBtn} onClick={onBack}>Retour au tableau de bord</button>
@@ -78,8 +135,28 @@ export default function CertificationRequest({ onBack, currentStatus = 'none' })
     );
   }
 
-  // ===== STATUT : APPROUVÉ =====
-  if (status === 'approved') {
+  // ===== STATUT : REJETÉE =====
+  if (certification && certification.statut === 'REJETEE') {
+    return (
+      <div style={styles.wrapper}>
+        <div style={styles.statusCard}>
+          <div style={{ ...styles.statusIconWrap, backgroundColor: '#fdecea' }}>
+            <XCircle size={48} color="#c0392b" />
+          </div>
+          <h2 style={styles.statusTitle}>Demande rejetée</h2>
+          <p style={styles.statusText}>
+            {certification.motifRejet || "Votre demande de certification n'a pas été retenue."}
+          </p>
+          <button style={styles.submitBtn} onClick={() => setCertification(null)}>
+            <Shield size={18} /> Soumettre une nouvelle demande
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== STATUT : APPROUVÉE =====
+  if (certification && certification.statut === 'APPROUVEE' && certification.estActive) {
     return (
       <div style={styles.wrapper}>
         <div style={styles.statusCard}>
@@ -88,8 +165,8 @@ export default function CertificationRequest({ onBack, currentStatus = 'none' })
           </div>
           <h2 style={styles.statusTitle}>Vous êtes certifié ! ✅</h2>
           <p style={styles.statusText}>
-            Félicitations ! Votre exploitation <strong>{form.farmName || 'votre ferme'}</strong> est maintenant certifiée.<br />
-            Le badge <strong>✅ Certifié</strong> apparaît désormais sur tous vos produits.
+            Le badge <strong>✅ Certifié</strong> apparaît désormais sur tous vos produits, jusqu'au{' '}
+            <strong>{certification.dateExpiration ? new Date(certification.dateExpiration).toLocaleDateString('fr-FR') : ''}</strong>.
           </p>
           <button style={styles.backToStatusBtn} onClick={onBack}>Retour au tableau de bord</button>
         </div>
@@ -97,12 +174,11 @@ export default function CertificationRequest({ onBack, currentStatus = 'none' })
     );
   }
 
-  // ===== FORMULAIRE =====
+  // ===== FORMULAIRE (aucune demande, ou certification expirée) =====
   return (
     <div style={styles.wrapper}>
       <div style={styles.container}>
 
-        {/* Header */}
         <div style={styles.header}>
           <button style={styles.backBtn} onClick={onBack}>
             <ArrowLeft size={18} /> Retour
@@ -118,127 +194,94 @@ export default function CertificationRequest({ onBack, currentStatus = 'none' })
 
         <div style={styles.grid}>
 
-          {/* Colonne gauche - Formulaire */}
           <div style={styles.formCard}>
 
-            <h3 style={styles.sectionTitle}>Informations sur l'exploitation</h3>
+            <h3 style={styles.sectionTitle}>Pièce d'identité</h3>
 
             <div style={styles.inputGroup}>
-              <label style={styles.label}>Nom de la ferme / exploitation *</label>
-              <input
-                name="farmName"
-                type="text"
-                placeholder="Ex: Ferme Dschang Bio"
-                style={styles.input}
-                value={form.farmName}
-                onChange={handleChange}
-              />
+              <label style={styles.label}>Type de document *</label>
+              <select style={styles.input} value={typeDocument} onChange={(e) => setTypeDocument(e.target.value)}>
+                {TYPES_DOCUMENT.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
             </div>
 
             <div style={styles.row2}>
               <div style={styles.inputGroup}>
-                <label style={styles.label}>Localisation *</label>
-                <input
-                  name="location"
-                  type="text"
-                  placeholder="Ex: Dschang, Ouest"
-                  style={styles.input}
-                  value={form.location}
-                  onChange={handleChange}
-                />
+                <label style={styles.label}>Recto *</label>
+                <div style={styles.uploadZone} onClick={() => rectoRef.current.click()}>
+                  <input ref={rectoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleUpload(setIdRecto)} />
+                  {idRecto ? <img src={idRecto} alt="Recto" style={styles.previewImg} /> : <ImageIcon size={24} color="#2d6a4f" />}
+                </div>
               </div>
               <div style={styles.inputGroup}>
-                <label style={styles.label}>Années d'activité</label>
-                <input
-                  name="yearsActive"
-                  type="number"
-                  placeholder="Ex: 5"
-                  style={styles.input}
-                  value={form.yearsActive}
-                  onChange={handleChange}
-                />
+                <label style={styles.label}>Verso *</label>
+                <div style={styles.uploadZone} onClick={() => versoRef.current.click()}>
+                  <input ref={versoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleUpload(setIdVerso)} />
+                  {idVerso ? <img src={idVerso} alt="Verso" style={styles.previewImg} /> : <ImageIcon size={24} color="#2d6a4f" />}
+                </div>
+              </div>
+            </div>
+
+            <h3 style={styles.sectionTitle}>Votre photo *</h3>
+            <p style={styles.hint}>Une photo récente de vous, pour vérifier votre identité.</p>
+            <div style={styles.uploadZone} onClick={() => photoRef.current.click()}>
+              <input ref={photoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleUpload(setPhotoUtilisateur)} />
+              {photoUtilisateur ? <img src={photoUtilisateur} alt="Vous" style={styles.previewImg} /> : <ImageIcon size={24} color="#2d6a4f" />}
+            </div>
+
+            <h3 style={styles.sectionTitle}>Durée & paiement</h3>
+
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>Durée de la certification *</label>
+              <div style={styles.dureeRow}>
+                {DUREES.map(d => (
+                  <button
+                    key={d.mois}
+                    type="button"
+                    onClick={() => setDureeMois(d.mois)}
+                    style={{ ...styles.dureeBtn, ...(dureeMois === d.mois ? styles.dureeBtnActive : {}) }}
+                  >
+                    {d.mois} mois<br /><strong>{d.montant} FCFA</strong>
+                  </button>
+                ))}
               </div>
             </div>
 
             <div style={styles.inputGroup}>
-              <label style={styles.label}>Description de l'exploitation</label>
-              <textarea
-                name="description"
-                placeholder="Décrivez vos pratiques agricoles, certifications existantes, méthodes de culture..."
-                style={styles.textarea}
-                rows="4"
-                value={form.description}
-                onChange={handleChange}
-              />
+              <label style={styles.label}>Moyen de paiement *</label>
+              <select style={styles.input} value={moyenPaiement} onChange={(e) => setMoyenPaiement(e.target.value)}>
+                <option value="MTN_MOMO">MTN Mobile Money</option>
+                <option value="ORANGE_MONEY">Orange Money</option>
+              </select>
             </div>
 
-            {/* Documents justificatifs */}
-            <h3 style={styles.sectionTitle}>Documents justificatifs *</h3>
-            <p style={styles.hint}>Pièce d'identité, titre foncier, certificat agricole, registre de commerce...</p>
-
-            <div style={styles.uploadZone} onClick={() => docInputRef.current.click()}>
-              <input
-                ref={docInputRef}
-                type="file"
-                multiple
-                accept=".pdf,.jpg,.jpeg,.png"
-                style={{ display: 'none' }}
-                onChange={handleDocUpload}
-              />
-              <FileText size={28} color="#2d6a4f" />
-              <span style={styles.uploadText}>Cliquez pour ajouter des documents (PDF, JPG, PNG)</span>
-            </div>
-
-            {documents.length > 0 && (
-              <div style={styles.docList}>
-                {documents.map((doc, i) => (
-                  <div key={i} style={styles.docItem}>
-                    <FileText size={16} color="#2d6a4f" />
-                    <span style={styles.docName}>{doc.name}</span>
-                    <span style={styles.docSize}>{doc.size}</span>
-                    <button style={styles.docRemove} onClick={() => removeDoc(i)}>
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
+            {numeroReception && (
+              <div style={styles.infoBox}>
+                <AlertCircle size={16} color="#e07a5f" />
+                <span style={styles.infoText}>
+                  Effectuez le paiement de <strong>{montantSelectionne} FCFA</strong> au numéro <strong>{numeroReception}</strong>, puis indiquez ci-dessous le numéro utilisé.
+                </span>
               </div>
             )}
 
-            {/* Photos de l'exploitation */}
-            <h3 style={styles.sectionTitle}>Photos de l'exploitation (optionnel)</h3>
-
-            <div style={styles.uploadZone} onClick={() => photoInputRef.current.click()}>
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>Votre numéro de paiement *</label>
               <input
-                ref={photoInputRef}
-                type="file"
-                multiple
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={handlePhotoUpload}
+                type="tel"
+                placeholder="Ex: 6XX XXX XXX"
+                style={styles.input}
+                value={numeroPaiement}
+                onChange={(e) => setNumeroPaiement(e.target.value)}
               />
-              <ImageIcon size={28} color="#2d6a4f" />
-              <span style={styles.uploadText}>Ajoutez des photos de votre ferme</span>
             </div>
 
-            {photos.length > 0 && (
-              <div style={styles.photoGrid}>
-                {photos.map((photo, i) => (
-                  <div key={i} style={styles.photoItem}>
-                    <img src={photo} alt="" style={styles.photoImg} />
-                    <button style={styles.photoRemove} onClick={() => removePhoto(i)}>
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            {error && <p style={styles.errorText}>{error}</p>}
 
-            <button style={styles.submitBtn} onClick={handleSubmit}>
-              <Shield size={18} /> Envoyer la demande de certification
+            <button style={styles.submitBtn} onClick={handleSubmit} disabled={submitting}>
+              <Shield size={18} /> {submitting ? 'Envoi en cours...' : 'Envoyer la demande de certification'}
             </button>
           </div>
 
-          {/* Colonne droite - Info */}
           <div style={styles.sideCard}>
             <h3 style={styles.sideTitle}>Pourquoi se certifier ?</h3>
             <div style={styles.benefitList}>
@@ -254,16 +297,11 @@ export default function CertificationRequest({ onBack, currentStatus = 'none' })
                 <CheckCircle size={18} color="#2d6a4f" />
                 <span>Meilleur classement dans les résultats</span>
               </div>
-              <div style={styles.benefitItem}>
-                <CheckCircle size={18} color="#2d6a4f" />
-                <span>Accès à des fonctionnalités premium</span>
-              </div>
             </div>
-
             <div style={styles.infoBox}>
               <AlertCircle size={16} color="#e07a5f" />
               <span style={styles.infoText}>
-                Le traitement de votre demande prend généralement entre <strong>2 et 5 jours ouvrés</strong>.
+                Votre demande est examinée par un administrateur après confirmation du paiement.
               </span>
             </div>
           </div>
@@ -293,32 +331,24 @@ const styles = {
   row2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' },
   label: { fontSize: '13px', fontWeight: '700', color: '#343a40' },
   input: { width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1.5px solid #dee2e6', fontSize: '14px', backgroundColor: '#f8f9fa', outline: 'none', boxSizing: 'border-box' },
-  textarea: { width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1.5px solid #dee2e6', fontSize: '14px', backgroundColor: '#f8f9fa', outline: 'none', resize: 'vertical', fontFamily: 'inherit', boxSizing: 'border-box' },
 
-  uploadZone: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', padding: '32px', border: '2px dashed #b7e4c7', borderRadius: '16px', backgroundColor: '#f0f7f4', cursor: 'pointer', marginBottom: '12px' },
-  uploadText: { fontSize: '13px', color: '#2d6a4f', fontWeight: '600', textAlign: 'center' },
+  uploadZone: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '20px', minHeight: '100px', border: '2px dashed #b7e4c7', borderRadius: '16px', backgroundColor: '#f0f7f4', cursor: 'pointer', marginBottom: '4px', overflow: 'hidden' },
+  previewImg: { width: '100%', height: '80px', objectFit: 'cover', borderRadius: '10px' },
 
-  docList: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' },
-  docItem: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px', backgroundColor: '#f8f9fa', borderRadius: '10px', border: '1px solid #e9ecef' },
-  docName: { flex: 1, fontSize: '13px', fontWeight: '600', color: '#212529', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  docSize: { fontSize: '12px', color: '#adb5bd' },
-  docRemove: { background: 'none', border: 'none', cursor: 'pointer', color: '#e07a5f', display: 'flex' },
-
-  photoGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '12px' },
-  photoItem: { position: 'relative', aspectRatio: '1/1', borderRadius: '10px', overflow: 'hidden' },
-  photoImg: { width: '100%', height: '100%', objectFit: 'cover' },
-  photoRemove: { position: 'absolute', top: '4px', right: '4px', width: '20px', height: '20px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.6)', color: '#ffffff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
+  dureeRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' },
+  dureeBtn: { padding: '12px 8px', borderRadius: '12px', border: '1.5px solid #dee2e6', backgroundColor: '#f8f9fa', fontSize: '12px', color: '#495057', cursor: 'pointer', textAlign: 'center', fontWeight: '600' },
+  dureeBtnActive: { border: '1.5px solid #2d6a4f', backgroundColor: '#e9f5ee', color: '#1b4d3e' },
 
   submitBtn: { width: '100%', padding: '16px', backgroundColor: '#2d6a4f', color: '#ffffff', border: 'none', borderRadius: '16px', fontSize: '15px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginTop: '24px', boxShadow: '0 8px 24px rgba(45,106,79,0.3)' },
+  errorText: { color: '#c0392b', fontSize: '13px', fontWeight: '700', margin: '8px 0 0 0' },
 
   sideCard: { backgroundColor: '#e9f5ee', borderRadius: '24px', padding: '28px', border: '1px solid #b7e4c7' },
   sideTitle: { fontSize: '16px', fontWeight: '800', color: '#1b4d3e', margin: '0 0 20px 0' },
   benefitList: { display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' },
   benefitItem: { display: 'flex', alignItems: 'flex-start', gap: '10px', fontSize: '13px', color: '#212529', lineHeight: '1.5' },
-  infoBox: { display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '14px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #f5d4c8' },
+  infoBox: { display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '14px', backgroundColor: '#ffffff', borderRadius: '12px', border: '1px solid #f5d4c8', marginBottom: '16px' },
   infoText: { fontSize: '12px', color: '#495057', lineHeight: '1.5' },
 
-  // Statuts
   statusCard: { maxWidth: '500px', margin: '80px auto', backgroundColor: '#ffffff', borderRadius: '28px', padding: '48px', textAlign: 'center', boxShadow: '0 24px 64px rgba(0,0,0,0.08)' },
   statusIconWrap: { width: '96px', height: '96px', backgroundColor: '#fff8e8', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' },
   statusTitle: { fontSize: '24px', fontWeight: '900', color: '#212529', margin: '0 0 16px 0' },

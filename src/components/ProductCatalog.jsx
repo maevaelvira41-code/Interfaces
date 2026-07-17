@@ -1,30 +1,21 @@
 // src/components/ProductCatalog.jsx
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Search, ShoppingBag, Star, ArrowLeft } from 'lucide-react';
-import { CATEGORIES_META, PRODUCTS, CATEGORY_NAMES } from '../data/products';
+import useProduits from '../hooks/useProduits';
 
 export default function ProductCatalog({
   onBack,
   onNavigateToProduct,
   onAddToCart,
 }) {
+  const { produits, categories, chargement, erreur } = useProduits();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [filteredProducts, setFilteredProducts] = useState(null);
 
-  const categories = CATEGORIES_META.map(c => ({
-    id: c.id,
-    name: c.name,
-    color: c.color,
-  }));
-
-  const allProducts = PRODUCTS.map(p => ({
-    ...p,
-    catName: CATEGORY_NAMES[p.categoryId] || p.categoryId,
-  }));
-
   const applyFilters = (query, categoryId) => {
-    let filtered = allProducts;
+    let filtered = produits;
 
     if (categoryId !== 'all') {
       filtered = filtered.filter(p => p.categoryId === categoryId);
@@ -35,11 +26,7 @@ export default function ProductCatalog({
       filtered = filtered.filter(p => {
         if (p.name.toLowerCase().includes(q)) return true;
         if (p.farm.toLowerCase().includes(q)) return true;
-        if (p.catName.toLowerCase().includes(q)) return true;
-        if ((q === 'agricole' || q === 'produit agricole' || q === 'produits agricoles') && p.categoryId === 'agricole')
-          return true;
-        if ((q === 'elevage' || q === 'élevage' || q === 'pêche' || q === 'peche' || q === 'poisson') && p.categoryId === 'elevage')
-          return true;
+        if (p.category.toLowerCase().includes(q)) return true;
         return false;
       });
     }
@@ -64,13 +51,34 @@ export default function ProductCatalog({
     setFilteredProducts(null);
   };
 
-  const displayedProducts = filteredProducts !== null ? filteredProducts : allProducts;
+  const displayedProducts = filteredProducts !== null ? filteredProducts : produits;
 
-  const counts = {
-    all: allProducts.length,
-    agricole: allProducts.filter(p => p.categoryId === 'agricole').length,
-    elevage: allProducts.filter(p => p.categoryId === 'elevage').length,
-  };
+  const counts = useMemo(() => {
+    const parCategorie = { all: produits.length };
+    categories.forEach(cat => {
+      parCategorie[cat.id] = produits.filter(p => p.categoryId === cat.id).length;
+    });
+    return parCategorie;
+  }, [produits, categories]);
+
+  if (chargement) {
+    return (
+      <div style={styles.container}>
+        <p style={styles.subtitle}>Chargement des produits...</p>
+      </div>
+    );
+  }
+
+  if (erreur) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.emptyState}>
+          <p style={styles.emptyText}>Impossible de charger le catalogue : {erreur}</p>
+          <button style={styles.emptyBtn} onClick={onBack}>Retour</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
@@ -79,7 +87,7 @@ export default function ProductCatalog({
           <ArrowLeft size={20} /> Retour
         </button>
         <h1 style={styles.title}>Catalogue des produits</h1>
-        <p style={styles.subtitle}>{allProducts.length} produits disponibles</p>
+        <p style={styles.subtitle}>{produits.length} produits disponibles</p>
       </div>
 
       <div style={styles.searchWrapper}>
@@ -115,7 +123,7 @@ export default function ProductCatalog({
             }}
             onClick={() => handleCategoryClick(cat.id)}
           >
-            {cat.name} ({counts[cat.id]})
+            {cat.name} ({counts[cat.id] || 0})
           </button>
         ))}
       </div>
@@ -131,7 +139,7 @@ export default function ProductCatalog({
             <div key={prod.id} style={styles.productCard} onClick={() => onNavigateToProduct(prod)}>
               <div style={styles.productImageWrap}>
                 <img src={prod.image} alt={prod.name} style={styles.productImg} onError={(e) => { e.target.src = 'https://picsum.photos/seed/' + prod.id + '/300/300'; }} />
-                <span style={styles.catBadge}>{prod.catName}</span>
+                <span style={styles.catBadge}>{prod.category}</span>
               </div>
               <div style={styles.productInfo}>
                 <div style={styles.prodHeaderRow}>

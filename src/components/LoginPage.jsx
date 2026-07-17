@@ -17,7 +17,7 @@ export default function LoginPage({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -28,21 +28,14 @@ export default function LoginPage({
       return;
     }
 
-    setTimeout(() => {
-      const user = onValidateLogin(email, password, role);
-      if (user === null) {
-        setError(`Aucun compte ${role} trouvé avec ces identifiants.`);
-        setLoading(false);
-        return;
-      }
-      if (user.pendingApproval) {
-        setError('Votre compte vendeur est en attente de validation. Veuillez patienter.');
-        setLoading(false);
-        return;
-      }
+    try {
+      const user = await onValidateLogin(email, password, role);
       onLoginSuccess(user);
+    } catch (err) {
+      setError(err.message || 'Email ou mot de passe incorrect.');
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   return (

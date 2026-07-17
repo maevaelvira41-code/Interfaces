@@ -71,7 +71,7 @@ export default function ShoppingCart({
       setPaymentSuccess(true);
       // Appeler onCheckout pour valider la commande après 2 secondes
       setTimeout(() => {
-        onCheckout();
+        onCheckout({ paymentMethod, paymentData });
       }, 1500);
     }, 2000);
   };

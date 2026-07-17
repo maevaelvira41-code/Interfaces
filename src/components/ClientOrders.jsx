@@ -1,6 +1,6 @@
  // src/components/ClientOrders.jsx
 import React, { useState } from 'react';
-import { ArrowLeft, Package, CheckCircle, Clock, Truck, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Package, CheckCircle, Clock, Truck, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function ClientOrders({ orders, onBackHome }) {
   const [expandedOrder, setExpandedOrder] = useState(null);
@@ -9,6 +9,8 @@ export default function ClientOrders({ orders, onBackHome }) {
     if (status === 'Livrée') return { color: '#2d6a4f', bg: '#e9f5ee', icon: <CheckCircle size={16} color="#2d6a4f" /> };
     if (status === 'En livraison') return { color: '#f5b041', bg: '#fff3e0', icon: <Truck size={16} color="#f5b041" /> };
     if (status === 'En préparation') return { color: '#0066cc', bg: '#e0f0ff', icon: <Clock size={16} color="#0066cc" /> };
+    if (status === 'Validée') return { color: '#6f42c1', bg: '#f1eafc', icon: <Package size={16} color="#6f42c1" /> };
+    if (status === 'Annulée') return { color: '#b3261e', bg: '#fdecea', icon: <XCircle size={16} color="#b3261e" /> };
     return { color: '#adb5bd', bg: '#f1f3f5', icon: <Clock size={16} color="#adb5bd" /> };
   };
 
