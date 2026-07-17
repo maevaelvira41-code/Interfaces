@@ -652,21 +652,40 @@ export default function App() {
         return <EditProfile
           currentUser={currentUser}
           onBack={() => navigate('user-profile')}
-          onSave={(updatedData) => {
-            const updatedUser = { ...currentUser, ...updatedData };
-            setCurrentUser(updatedUser);
-            setRegisteredUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
-            navigate('user-profile');
+          onSave={async (updatedData) => {
+            // Appelle utilisateur-service (PUT /api/utilisateurs/{id}) au lieu
+            // de ne mettre à jour que l'état local. Le backend n'a qu'un seul
+            // champ "nom" : on recombine prenom + nom avec joinNomComplet.
+            try {
+              const profileDto = await utilisateurApi.updateProfil(currentUser.id, {
+                nom: joinNomComplet(updatedData.prenom, updatedData.nom),
+                email: updatedData.email,
+                telephone: updatedData.telephone,
+                photo: updatedData.photo,
+                adresse: currentUser.adresse || '',
+              });
+              const updatedUser = mapProfileToFrontendUser(
+                profileDto,
+                [ROLE_FRONTEND_TO_BACKEND[currentUser.role]]
+              );
+              setCurrentUser(updatedUser);
+              setRegisteredUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+              navigate('user-profile');
+            } catch (err) {
+              alert(err?.message || 'La mise à jour du profil a échoué.');
+            }
           }}
         />;
       case 'change-password':
         return <ChangePassword
           currentUser={currentUser}
           onBack={() => navigate('user-profile')}
-          onSave={(newPassword) => {
-            const updatedUser = { ...currentUser, password: newPassword };
-            setCurrentUser(updatedUser);
-            setRegisteredUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+          onSave={async (currentPassword, newPassword) => {
+            // Appelle utilisateur-service (PUT /api/utilisateurs/{id}/mot-de-passe).
+            // Le backend vérifie lui-même l'ancien mot de passe ; en cas
+            // d'erreur, on laisse l'exception remonter jusqu'à ChangePassword
+            // pour qu'elle affiche le message sur le champ concerné.
+            await utilisateurApi.changerMotDePasse(currentUser.id, currentPassword, newPassword);
             addNotification(currentUser.id, 'info', 'Votre mot de passe a été modifié avec succès.', null);
           }}
         />;

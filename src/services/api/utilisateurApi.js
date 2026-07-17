@@ -37,3 +37,12 @@ export const updateProfil = (id, updates) => httpPut(BASE, `/api/utilisateurs/${
 
 /** Delete a user account. */
 export const deleteUtilisateur = (id) => httpDelete(BASE, `/api/utilisateurs/${id}`);
+
+/**
+ * Change a user's password. Backend verifies ancienMotDePasse before
+ * applying nouveauMotDePasse (PUT /api/utilisateurs/{id}/mot-de-passe).
+ * Throws (via httpPut) if the current password is wrong (400) or the
+ * user isn't found (404).
+ */
+export const changerMotDePasse = (id, ancienMotDePasse, nouveauMotDePasse) =>
+  httpPut(BASE, `/api/utilisateurs/${id}/mot-de-passe`, { ancienMotDePasse, nouveauMotDePasse });
