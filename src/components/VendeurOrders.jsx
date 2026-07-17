@@ -152,6 +152,7 @@ export default function VendeurOrders({ orders, vendeurProducts, onUpdateOrderSt
                         <option value="En préparation">En préparation</option>
                         <option value="En livraison">En livraison</option>
                         <option value="Livrée">Livrée</option>
+                        <option value="Annulée">Annulée</option>
                       </select>
                     </div>
                   </div>

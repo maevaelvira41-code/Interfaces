@@ -16,13 +16,14 @@ export const STATUT_BACKEND_TO_FRANCAIS = {
   ANNULEE: 'Annulée',
 };
 
-// VendeurOrders ne propose que ces 4 statuts dans son menu déroulant :
-// VALIDEE et ANNULEE ne sont donc pas atteignables depuis cette interface.
+// VendeurOrders propose ces 5 statuts dans son menu déroulant (VALIDEE
+// reste un état transitoire automatique, non choisi manuellement).
 export const STATUT_FRANCAIS_TO_BACKEND = {
   'En attente': 'EN_ATTENTE',
   'En préparation': 'EN_PREPARATION',
   'En livraison': 'EXPEDIEE',
   'Livrée': 'LIVREE',
+  'Annulée': 'ANNULEE',
 };
 
 /**
