@@ -1,5 +1,5 @@
 // src/components/SellerDashboard.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Package, ShoppingBag, Bell, User,
   BarChart3, AlertTriangle, LogOut, Menu, X,
@@ -8,6 +8,7 @@ import {
   Upload
 } from 'lucide-react';
 import VendeurOrders from './VendeurOrders';
+import { certificationApi } from '../services/api';
 
 const menuItems = [
   { id: 'dashboard', label: 'Tableau de bord', icon: <LayoutDashboard size={18} /> },
@@ -53,12 +54,21 @@ export default function SellerDashboard({
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
   const [certificationStatus, setCertificationStatus] = useState('none');
-  const [certificationData, setCertificationData] = useState({
-    cni: null,
-    cniFile: null,
-    diplome: null,
-    diplomeFile: null,
-  });
+
+  useEffect(() => {
+    certificationApi.getMesCertifications()
+      .then((mesCertifications) => {
+        const derniere = [...mesCertifications].sort(
+          (a, b) => new Date(b.dateDemande) - new Date(a.dateDemande)
+        )[0];
+        if (!derniere) { setCertificationStatus('none'); return; }
+        if (derniere.statut === 'APPROUVEE' && derniere.estActive) setCertificationStatus('approved');
+        else if (derniere.statut === 'EN_ATTENTE') setCertificationStatus('pending');
+        else if (derniere.statut === 'REJETEE') setCertificationStatus('rejected');
+        else setCertificationStatus('none');
+      })
+      .catch(() => setCertificationStatus('none'));
+  }, []);
 
   const totalProducts = vendeurProducts.length;
   const totalOrders = adminOrders.filter(o => {
@@ -90,15 +100,7 @@ export default function SellerDashboard({
   });
   const maxRevenue = Math.max(1, ...monthlyRevenue);
 
-  const handleCertificationSubmit = () => {
-    if (!certificationData.cniFile || !certificationData.diplomeFile) {
-      alert('Veuillez fournir votre CNI et votre diplôme de formation agricole');
-      return;
-    }
-    setCertificationStatus('pending');
-    alert('✅ Votre demande de certification a été envoyée. Elle sera examinée sous 24 à 48h.');
-  };
-
+  
   const handleSelectPlanClick = (plan) => {
     if (plan.price === 0) {
       if (onSelectPlan) {
@@ -157,7 +159,7 @@ export default function SellerDashboard({
       )}
       {certificationStatus === 'none' && (
         <div style={{ ...styles.alertBanner, backgroundColor: '#fffbea', borderColor: '#f5e4a0', cursor: 'pointer' }}
-          onClick={() => setActiveMenu('certification')}>
+          onClick={() => onNavigate && onNavigate('certification')}>
           <Shield size={20} color="#f5b041" />
           <span><strong>Obtenez votre certification</strong> pour gagner la confiance des clients</span>
           <span style={styles.alertLink}>Commencer →</span>
@@ -512,85 +514,6 @@ export default function SellerDashboard({
     );
   };
 
-  const renderCertification = () => {
-    const statusLabels = {
-      none: { label: 'Non certifié', color: '#adb5bd', bg: '#f8f9fa', icon: <Shield size={24} /> },
-      pending: { label: 'En attente d\'examen', color: '#f5b041', bg: '#fffbea', icon: <Clock size={24} /> },
-      approved: { label: '✅ Certifié', color: '#2d6a4f', bg: '#e9f5ee', icon: <CheckCircle size={24} /> },
-      rejected: { label: '❌ Rejeté', color: '#e07a5f', bg: '#fdf1ed', icon: <XCircle size={24} /> },
-    };
-    const status = statusLabels[certificationStatus] || statusLabels.none;
-
-    return (
-      <>
-        <div style={styles.pageHeader}>
-          <h2 style={styles.pageTitle}>Ma certification</h2>
-          <p style={styles.pageSubtitle}>Obtenez la certification pour gagner la confiance des acheteurs</p>
-        </div>
-
-        <div style={styles.certStatusCard}>
-          <div style={styles.certStatusIcon}>{status.icon}</div>
-          <div>
-            <h3 style={styles.certStatusTitle}>Statut : {status.label}</h3>
-            <p style={styles.certStatusDesc}>
-              {certificationStatus === 'none' && 'Soumettez vos documents pour obtenir la certification.'}
-              {certificationStatus === 'pending' && 'Vos documents sont en cours de vérification (24 à 48h).'}
-              {certificationStatus === 'approved' && 'Félicitations ! Votre compte est certifié.'}
-              {certificationStatus === 'rejected' && 'Votre demande a été rejetée. Contactez le support.'}
-            </p>
-          </div>
-        </div>
-
-        {certificationStatus === 'none' && (
-          <div style={styles.certForm}>
-            <h3 style={styles.certFormTitle}>📄 Soumettre votre demande</h3>
-            <p style={styles.certFormSub}>Fournissez les documents suivants :</p>
-            <div style={styles.certField}>
-              <label style={styles.certLabel}>🪪 Pièce d'identité (CNI ou Passeport) *</label>
-              <div style={styles.certUpload}>
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    setCertificationData(prev => ({ ...prev, cniFile: file, cni: file?.name || null }));
-                  }}
-                  style={{ display: 'none' }}
-                  id="cni-upload"
-                />
-                <label htmlFor="cni-upload" style={styles.uploadLabel}>
-                  <Upload size={16} /> {certificationData.cni || 'Choisir un fichier'}
-                </label>
-              </div>
-            </div>
-            <div style={styles.certField}>
-              <label style={styles.certLabel}>🎓 Diplôme de formation agricole *</label>
-              <p style={styles.certHint}>Diplôme d'ingénieur agronome, CES élevage, formation agropastorale...</p>
-              <div style={styles.certUpload}>
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    setCertificationData(prev => ({ ...prev, diplomeFile: file, diplome: file?.name || null }));
-                  }}
-                  style={{ display: 'none' }}
-                  id="diplome-upload"
-                />
-                <label htmlFor="diplome-upload" style={styles.uploadLabel}>
-                  <Upload size={16} /> {certificationData.diplome || 'Choisir un fichier'}
-                </label>
-              </div>
-            </div>
-            <button style={styles.submitBtn} onClick={handleCertificationSubmit}>
-              <Send size={16} /> Envoyer la demande
-            </button>
-          </div>
-        )}
-      </>
-    );
-  };
-
   const renderNotifications = () => (
     <>
       <div style={styles.pageHeader}>
@@ -644,7 +567,6 @@ export default function SellerDashboard({
       case 'stock': return renderStockAlerts();
       case 'orders': return renderOrders();
       case 'subscriptions': return renderSubscriptions();
-      case 'certification': return renderCertification();
       case 'notifications': return renderNotifications();
       case 'profile': return renderProfile();
       default: return renderDashboard();
@@ -665,7 +587,7 @@ export default function SellerDashboard({
             <button
               key={item.id}
               style={{ ...styles.navItem, ...(activeMenu === item.id ? styles.navItemActive : {}) }}
-              onClick={() => setActiveMenu(item.id)}
+              onClick={() => item.id === 'certification' ? (onNavigate && onNavigate('certification')) : setActiveMenu(item.id)}
             >
               {item.icon}
               {sidebarOpen && <span>{item.label}</span>}

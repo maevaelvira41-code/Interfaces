@@ -79,7 +79,6 @@ export default function App() {
   // ===== AUTRES ÉTATS =====
   const [showSignalement, setShowSignalement] = useState(false);
   const [signalementProduct, setSignalementProduct] = useState(null);
-  const [certificationStatus, setCertificationStatus] = useState('none');
   const [activePlan, setActivePlan] = useState('gratuit');
   const [vendeurProducts, setVendeurProducts] = useState([]);
   const [vendorVerifications, setVendorVerifications] = useState([]);
@@ -760,9 +759,7 @@ export default function App() {
         />;
       case 'certification':
         return <CertificationRequest
-          currentStatus={certificationStatus}
           onBack={() => navigate('seller-dashboard')}
-          onSubmit={() => setCertificationStatus('pending')}
         />;
       case 'admin-dashboard':
         return <AdminDashboard
