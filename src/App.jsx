@@ -627,10 +627,12 @@ export default function App() {
         return <ChangePassword
           currentUser={currentUser}
           onBack={() => navigate('user-profile')}
-          onSave={(newPassword) => {
-            const updatedUser = { ...currentUser, password: newPassword };
-            setCurrentUser(updatedUser);
-            setRegisteredUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+          onSave={async (currentPassword, newPassword) => {
+            // Appelle utilisateur-service (PUT /api/utilisateurs/{id}/mot-de-passe).
+            // Le backend vérifie lui-même l'ancien mot de passe ; en cas
+            // d'erreur, on laisse l'exception remonter jusqu'à ChangePassword
+            // pour qu'elle affiche le message sur le champ concerné.
+            await utilisateurApi.changerMotDePasse(currentUser.id, currentPassword, newPassword);
             addNotification(currentUser.id, 'info', 'Votre mot de passe a été modifié avec succès.', null);
           }}
         />;

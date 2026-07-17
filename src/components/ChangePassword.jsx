@@ -36,7 +36,7 @@ export default function ChangePassword({ onBack, onSave, currentUser }) {
     return newErrors;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = validate();
     if (Object.keys(newErrors).length > 0) {
@@ -44,24 +44,23 @@ export default function ChangePassword({ onBack, onSave, currentUser }) {
       return;
     }
 
-    // Vérifier que le mot de passe actuel correspond
-    if (formData.currentPassword !== currentUser?.password) {
-      setErrors({ currentPassword: 'Mot de passe actuel incorrect' });
-      return;
-    }
-
+    // La vérification de l'ancien mot de passe se fait désormais côté
+    // serveur (utilisateur-service ne stocke pas de mot de passe en clair,
+    // donc on ne peut pas le comparer ici).
     setLoading(true);
-    setTimeout(() => {
-      // Simuler la sauvegarde
+    try {
       if (onSave) {
-        onSave(formData.newPassword);
+        await onSave(formData.currentPassword, formData.newPassword);
       }
       setLoading(false);
       setSuccess(true);
       setTimeout(() => {
         onBack();
       }, 1500);
-    }, 800);
+    } catch (err) {
+      setLoading(false);
+      setErrors({ currentPassword: err?.message || 'Mot de passe actuel incorrect' });
+    }
   };
 
   return (
