@@ -48,8 +48,11 @@ export const changerMotDePasse = (id, ancienMotDePasse, nouveauMotDePasse) =>
   httpPut(BASE, `/api/utilisateurs/${id}/mot-de-passe`, { ancienMotDePasse, nouveauMotDePasse });
 
 /**
- * Block/unblock a user account (admin only). PUT /api/utilisateurs/{id}/blocage.
- * A blocked user can no longer log in (enforced by auth-service).
+ * Suspendre/lever la suspension d'un compte (admin uniquement).
+ * PUT /api/utilisateurs/{id}/suspension avec { jours }.
+ * jours == null ou <= 0 lève la suspension immédiatement ; sinon le
+ * compte est suspendu jusqu'à maintenant + jours (vérifié par
+ * auth-service à la connexion).
  */
-export const changerStatutBlocage = (id, bloque) =>
-  httpPut(BASE, `/api/utilisateurs/${id}/blocage`, { bloque });
+export const suspendreUtilisateur = (id, jours) =>
+  httpPut(BASE, `/api/utilisateurs/${id}/suspension`, { jours });

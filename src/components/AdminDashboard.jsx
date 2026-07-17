@@ -563,14 +563,16 @@ export default function AdminDashboard({
                       <div style={styles.certRight}>
                         <span style={{
                           ...styles.certStatus,
-                          color: u.blocked ? '#c0392b' : '#2d6a4f',
-                          backgroundColor: u.blocked ? '#fdecea' : '#e9f5ee',
+                          color: u.suspendu ? '#c0392b' : '#2d6a4f',
+                          backgroundColor: u.suspendu ? '#fdecea' : '#e9f5ee',
                         }}>
-                          {u.blocked ? '🚫 Bloqué' : '✅ Actif'}
+                          {u.suspendu
+                            ? `🚫 Suspendu jusqu'au ${new Date(u.suspenduJusquau).toLocaleDateString('fr-FR')}`
+                            : '✅ Actif'}
                         </span>
                         <div style={styles.certActions}>
-                          <button style={u.blocked ? styles.certApproveBtn : styles.certRejectBtn} onClick={() => onToggleUserBlocked && onToggleUserBlocked(u.id)}>
-                            {u.blocked ? 'Débloquer' : 'Bloquer'}
+                          <button style={u.suspendu ? styles.certApproveBtn : styles.certRejectBtn} onClick={() => onToggleUserBlocked && onToggleUserBlocked(u.id)}>
+                            {u.suspendu ? 'Lever la suspension' : 'Suspendre'}
                           </button>
                         </div>
                       </div>

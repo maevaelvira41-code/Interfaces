@@ -578,8 +578,15 @@ export default function App() {
   const handleToggleUserBlocked = async (userId) => {
     const user = registeredUsers.find(u => u.id === userId);
     if (!user) return;
+    let jours = 0;
+    if (!user.suspendu) {
+      const saisie = window.prompt('Suspendre ce compte pendant combien de jours ?', '7');
+      if (saisie === null) return; // annulé
+      jours = parseInt(saisie, 10);
+      if (!jours || jours <= 0) { alert('Veuillez saisir un nombre de jours valide.'); return; }
+    }
     try {
-      await utilisateurApi.changerStatutBlocage(userId, !user.blocked);
+      await utilisateurApi.suspendreUtilisateur(userId, jours);
       await chargerUtilisateurs();
     } catch (err) {
       alert(err?.message || "Le changement de statut a échoué.");

@@ -54,7 +54,8 @@ export function mapProfileToFrontendUser(dto, rolesFromToken = []) {
     telephone: dto.telephone || '',
     photo: dto.photo || null,
     plan: dto.plan || 'gratuit',
-    blocked: !!dto.bloque,
+    suspendu: !!dto.suspendu,
+    suspenduJusquau: dto.suspenduJusquau || null,
     actif: true,
   };
 }
