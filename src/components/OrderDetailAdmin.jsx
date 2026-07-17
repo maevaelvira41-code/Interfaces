@@ -188,16 +188,11 @@ export default function OrderDetailAdmin({ onBack, onMarkAsDeliveredState }) {
             <span style={styles.summaryValue}>25,000 FCFA</span>
           </div>
 
-          <div style={styles.summaryRow}>
-            <span style={styles.summaryLabel}>Frais livraison</span>
-            <span style={styles.summaryValue}>5,000 FCFA</span>
-          </div>
-
           <div style={styles.summaryDivider}></div>
 
           <div style={{ ...styles.summaryRow, marginBottom: '24px' }}>
             <span style={styles.totalLabel}>Total</span>
-            <span style={styles.totalValue}>30,000 FCFA</span>
+            <span style={styles.totalValue}>25,000 FCFA</span>
           </div>
 
           {/* Logistics metadata */}

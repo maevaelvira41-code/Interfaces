@@ -84,9 +84,9 @@ export default function App() {
   const [cartItems, setCartItems] = useState([]);
   const [authRedirectMessage, setAuthRedirectMessage] = useState('');
   const [signalements, setSignalements] = useState([]);
-  const [adminOrders, setAdminOrders] = useState([]);
-  // Vraies commandes issues de commande-service (remplacent progressivement
-  // adminOrders, gardé pour les écrans admin hors de mon périmètre).
+  // Vraies commandes issues de commande-service : mesCommandes pour le
+  // client, toutesLesCommandes pour l'admin/le vendeur (AdminDashboard,
+  // OrderManagementAdmin, SellerDashboard, VendeurOrders).
   const [mesCommandes, setMesCommandes] = useState([]);
   const [toutesLesCommandes, setToutesLesCommandes] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -94,16 +94,12 @@ export default function App() {
 
   // ===== CHARGEMENT DEPUIS localStorage =====
   useEffect(() => {
-    const savedUsers = localStorage.getItem('registeredUsers');
-    if (savedUsers) { try { setRegisteredUsers(JSON.parse(savedUsers)); } catch {} }
     const savedCart = localStorage.getItem('cartItems');
     if (savedCart) { try { setCartItems(JSON.parse(savedCart)); } catch {} }
     const savedVerifications = localStorage.getItem('vendorVerifications');
     if (savedVerifications) { try { setVendorVerifications(JSON.parse(savedVerifications)); } catch {} }
     const savedSignalements = localStorage.getItem('signalements');
     if (savedSignalements) { try { setSignalements(JSON.parse(savedSignalements)); } catch {} }
-    const savedOrders = localStorage.getItem('adminOrders');
-    if (savedOrders) { try { setAdminOrders(JSON.parse(savedOrders)); } catch {} }
     const savedNotifs = localStorage.getItem('notifications');
     if (savedNotifs) { try { setNotifications(JSON.parse(savedNotifs)); } catch {} }
     const savedPlan = localStorage.getItem('activePlan');
@@ -130,11 +126,9 @@ export default function App() {
   }, []);
 
   // ===== SAUVEGARDE =====
-  useEffect(() => { localStorage.setItem('registeredUsers', JSON.stringify(registeredUsers)); }, [registeredUsers]);
   useEffect(() => { localStorage.setItem('cartItems', JSON.stringify(cartItems)); }, [cartItems]);
   useEffect(() => { localStorage.setItem('vendorVerifications', JSON.stringify(vendorVerifications)); }, [vendorVerifications]);
   useEffect(() => { localStorage.setItem('signalements', JSON.stringify(signalements)); }, [signalements]);
-  useEffect(() => { localStorage.setItem('adminOrders', JSON.stringify(adminOrders)); }, [adminOrders]);
   useEffect(() => { localStorage.setItem('notifications', JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem('activePlan', activePlan); }, [activePlan]);
   useEffect(() => { localStorage.setItem('isClientMode', JSON.stringify(isClientMode)); }, [isClientMode]);
@@ -292,7 +286,7 @@ export default function App() {
   }, [currentUser?.id, currentUser?.role]);
 
   useEffect(() => {
-    if (currentUser?.role === 'vendeur') {
+    if (currentUser?.role === 'vendeur' || currentUser?.role === 'admin') {
       chargerToutesLesCommandes();
     } else {
       setToutesLesCommandes([]);
@@ -353,12 +347,8 @@ export default function App() {
   };
 
   // ===== VALIDATION DE COMMANDE (commande-service + paiement-service) =====
-  // Remplace l'ancienne commande 100% locale : crée la vraie commande, puis
-  // le vrai paiement si le moyen choisi est supporté par paiement-service
-  // (MethodePaiement n'a que ORANGE_MONEY / MOBILE_MONEY, pas de carte
-  // bancaire pour l'instant). On garde en plus l'ancienne mise à jour
-  // locale de adminOrders : SellerDashboard, AdminDashboard et
-  // OrderManagementAdmin (hors de mon périmètre) en dépendent encore.
+  // Crée la vraie commande, puis le vrai paiement si le moyen choisi est
+  // supporté par paiement-service (ORANGE_MONEY / MOBILE_MONEY / CARTE).
   const handleCheckout = async ({ paymentMethod, paymentData } = {}) => {
     try {
       const lignesCommande = cartItems.map(item => ({
@@ -386,22 +376,7 @@ export default function App() {
         });
       }
 
-      const newOrder = {
-        id: commande.id,
-        id_client: currentUser.id,
-        client: joinNomComplet(currentUser?.prenom, currentUser?.nom) || 'Client',
-        amount: commande.montantTotal,
-        status: 'En attente',
-        date: new Date().toLocaleDateString('fr-FR'),
-        items: cartItems.map(item => ({
-          nomProduit: item.name,
-          quantity: item.quantity,
-          prixUnitaire: item.price,
-          subtotal: item.price * item.quantity,
-        })),
-      };
-      setAdminOrders(prev => [...prev, newOrder]);
-      addNotification(1, 'info', `Nouvelle commande #${commande.id} de ${newOrder.client}`, '/admin/order-management-admin');
+      addNotification(1, 'info', `Nouvelle commande #${commande.id} de ${joinNomComplet(currentUser?.prenom, currentUser?.nom) || 'Client'}`, '/admin/order-management-admin');
       addNotification(currentUser.id, 'success', `Commande #${commande.id} confirmée !`, '/orders');
       setCartItems([]);
       await chargerMesCommandes();
@@ -854,7 +829,7 @@ export default function App() {
           onLogout={handleLogout}
           currentUser={currentUser}
           vendeurProducts={vendeurProducts}
-          adminOrders={adminOrders}
+          adminOrders={toutesLesCommandes}
           activePlan={activePlan}
           onSelectPlan={(plan) => {
             const updatedUser = { ...currentUser, plan: plan.id };
@@ -865,11 +840,15 @@ export default function App() {
             addNotification(currentUser.id, 'success', `Votre abonnement ${plan.name} est désormais actif !`, '/seller-dashboard');
             alert(`✅ Abonnement ${plan.name} activé avec succès !`);
           }}
-          onUpdateOrderStatus={(orderId, newStatus) => {
-            setAdminOrders(prev =>
-              prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o)
-            );
-            addNotification(1, 'info', `Statut de la commande #${orderId} mis à jour : ${newStatus}`, '/admin/order-management-admin');
+          onUpdateOrderStatus={async (orderId, newStatus) => {
+            try {
+              const statutBackend = STATUT_FRANCAIS_TO_BACKEND[newStatus] || newStatus;
+              await commandeApi.updateStatutCommande(orderId, statutBackend);
+              addNotification(1, 'info', `Statut de la commande #${orderId} mis à jour : ${newStatus}`, '/admin/order-management-admin');
+              await chargerToutesLesCommandes();
+            } catch (err) {
+              alert(err?.message || "La mise à jour du statut de la commande a échoué.");
+            }
           }}
         />;
       case 'sales-history':
@@ -889,7 +868,7 @@ export default function App() {
       case 'admin-dashboard':
         return <AdminDashboard
           registeredUsers={registeredUsers}
-          adminOrders={adminOrders}
+          adminOrders={toutesLesCommandes}
           vendorVerifications={vendorVerifications}
           signalements={signalements}
           vendeurProducts={vendeurProducts}
@@ -899,7 +878,7 @@ export default function App() {
         />;
       case 'order-management-admin':
         return <OrderManagementAdmin
-          ordersData={adminOrders}
+          ordersData={toutesLesCommandes}
           onViewOrder={() => navigate('order-detail-admin')}
           onBack={() => navigate('admin-dashboard')}
         />;
