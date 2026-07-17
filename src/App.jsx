@@ -362,6 +362,7 @@ export default function App() {
 
       const methode = paymentMethod === 'orange-money' ? 'ORANGE_MONEY'
         : paymentMethod === 'mtn-money' ? 'MOBILE_MONEY'
+        : paymentMethod === 'carte' ? 'CARTE'
         : null;
 
       if (methode) {
@@ -373,8 +374,6 @@ export default function App() {
           numeroPaiement: paymentData,
         });
       }
-      // Paiement carte bancaire : la commande est créée mais paiement-service
-      // ne peut pas encore l'enregistrer (pas de valeur d'enum pour la carte).
 
       const newOrder = {
         id: commande.id,

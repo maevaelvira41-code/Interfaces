@@ -1,6 +1,6 @@
 // src/components/VendeurOrders.jsx
 import React, { useState } from 'react';
-import { ArrowLeft, Package, CheckCircle, Clock, Truck, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Package, CheckCircle, Clock, Truck, XCircle, Eye, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function VendeurOrders({ orders, vendeurProducts, onUpdateOrderStatus }) {
   const [expandedOrder, setExpandedOrder] = useState(null);
@@ -20,6 +20,8 @@ export default function VendeurOrders({ orders, vendeurProducts, onUpdateOrderSt
     if (status === 'Livrée') return <CheckCircle size={18} color="#2d6a4f" />;
     if (status === 'En livraison') return <Truck size={18} color="#f5b041" />;
     if (status === 'En préparation') return <Clock size={18} color="#0066cc" />;
+    if (status === 'Validée') return <Package size={18} color="#6f42c1" />;
+    if (status === 'Annulée') return <XCircle size={18} color="#b3261e" />;
     return <Clock size={18} color="#adb5bd" />;
   };
 
@@ -27,6 +29,8 @@ export default function VendeurOrders({ orders, vendeurProducts, onUpdateOrderSt
     if (status === 'Livrée') return '#2d6a4f';
     if (status === 'En livraison') return '#f5b041';
     if (status === 'En préparation') return '#0066cc';
+    if (status === 'Validée') return '#6f42c1';
+    if (status === 'Annulée') return '#b3261e';
     return '#adb5bd';
   };
 
@@ -34,6 +38,8 @@ export default function VendeurOrders({ orders, vendeurProducts, onUpdateOrderSt
     if (status === 'Livrée') return '#e9f5ee';
     if (status === 'En livraison') return '#fff3e0';
     if (status === 'En préparation') return '#e0f0ff';
+    if (status === 'Validée') return '#f1eafc';
+    if (status === 'Annulée') return '#fdecea';
     return '#f1f3f5';
   };
 

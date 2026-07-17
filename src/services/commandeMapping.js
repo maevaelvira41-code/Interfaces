@@ -9,7 +9,7 @@
 
 export const STATUT_BACKEND_TO_FRANCAIS = {
   EN_ATTENTE: 'En attente',
-  VALIDEE: 'En préparation',
+  VALIDEE: 'Validée',
   EN_PREPARATION: 'En préparation',
   EXPEDIEE: 'En livraison',
   LIVREE: 'Livrée',
