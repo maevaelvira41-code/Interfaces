@@ -34,10 +34,11 @@ import MyProducts from './components/MyProducts';
 import NotificationsCenter from './components/NotificationsCenter';
 import OrderDetailAdmin from './components/OrderDetailAdmin';
 import ChangePassword from './components/ChangePassword';
-import { authApi, utilisateurApi, produitApi, signalementApi, getSession } from './services/api';
+import { authApi, utilisateurApi, produitApi, signalementApi, commandeApi, paiementApi, getSession } from './services/api';
 import { ROLE_FRONTEND_TO_BACKEND, joinNomComplet, mapProfileToFrontendUser } from './services/userMapping';
 import { mapProduitPourVendeur, construireProduitRequest } from './services/productMapping';
 import { mapSignalementPourAffichage, construireRaison, TYPE_FRONTEND_TO_BACKEND } from './services/signalementMapping';
+import { mapCommandePourAffichage, STATUT_FRANCAIS_TO_BACKEND } from './services/commandeMapping';
 
 export default function App() {
   const [screen, setScreen] = useState('home');
@@ -86,6 +87,10 @@ export default function App() {
   const [authRedirectMessage, setAuthRedirectMessage] = useState('');
   const [signalements, setSignalements] = useState([]);
   const [adminOrders, setAdminOrders] = useState([]);
+  // Vraies commandes issues de commande-service (remplacent progressivement
+  // adminOrders, gardé pour les écrans admin hors de mon périmètre).
+  const [mesCommandes, setMesCommandes] = useState([]);
+  const [toutesLesCommandes, setToutesLesCommandes] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null);
   const [isClientMode, setIsClientMode] = useState(false);
 
@@ -210,6 +215,80 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role]);
 
+  // ===== COMMANDES (commande-service) =====
+  // commande-service ne renvoie que des IDs (produitId, clientId) : on
+  // résout les noms de produits (et, pour le vendeur, les noms de clients)
+  // avant de transmettre aux écrans, qui attendent déjà ce format enrichi
+  // (voir commandeMapping.js).
+  const resoudreNomsProduits = async (commandes) => {
+    const idsUniques = [...new Set(
+      commandes.flatMap((c) => (c.lignesCommande || []).map((lc) => lc.produitId))
+    )];
+    const noms = new Map();
+    await Promise.all(idsUniques.map(async (id) => {
+      try {
+        const produit = await produitApi.getProduitById(id);
+        noms.set(id, produit?.nom);
+      } catch {
+        // produit supprimé entretemps : on gardera le repli "Produit #id"
+      }
+    }));
+    return noms;
+  };
+
+  const chargerMesCommandes = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const dtos = await commandeApi.getCommandesByClientId(currentUser.id);
+      const noms = await resoudreNomsProduits(dtos || []);
+      const nomClient = joinNomComplet(currentUser.prenom, currentUser.nom);
+      setMesCommandes((dtos || []).map((dto) => mapCommandePourAffichage(dto, nomClient, currentUser.email, noms)));
+    } catch (err) {
+      console.error('Impossible de charger vos commandes :', err);
+    }
+  };
+
+  const chargerToutesLesCommandes = async () => {
+    try {
+      const dtos = await commandeApi.getAllCommandes();
+      const noms = await resoudreNomsProduits(dtos || []);
+      const idsClientsUniques = [...new Set((dtos || []).map((c) => c.clientId))];
+      const clients = new Map();
+      await Promise.all(idsClientsUniques.map(async (id) => {
+        try {
+          const utilisateur = await utilisateurApi.getUtilisateurById(id);
+          clients.set(id, utilisateur);
+        } catch {
+          // client supprimé entretemps : on gardera le repli "Client #id"
+        }
+      }));
+      setToutesLesCommandes((dtos || []).map((dto) => {
+        const client = clients.get(dto.clientId);
+        return mapCommandePourAffichage(dto, client?.nom, client?.email, noms);
+      }));
+    } catch (err) {
+      console.error('Impossible de charger les commandes :', err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.role === 'client') {
+      chargerMesCommandes();
+    } else {
+      setMesCommandes([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role]);
+
+  useEffect(() => {
+    if (currentUser?.role === 'vendeur') {
+      chargerToutesLesCommandes();
+    } else {
+      setToutesLesCommandes([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role]);
+
   // ===== GARDE AUTH =====
   const requireLogin = (action) => {
     if (currentUser) action();
@@ -260,6 +339,66 @@ export default function App() {
         item.id === id ? { ...item, quantity: newQuantity, total: item.price * newQuantity } : item
       )
     );
+  };
+
+  // ===== VALIDATION DE COMMANDE (commande-service + paiement-service) =====
+  // Remplace l'ancienne commande 100% locale : crée la vraie commande, puis
+  // le vrai paiement si le moyen choisi est supporté par paiement-service
+  // (MethodePaiement n'a que ORANGE_MONEY / MOBILE_MONEY, pas de carte
+  // bancaire pour l'instant). On garde en plus l'ancienne mise à jour
+  // locale de adminOrders : SellerDashboard, AdminDashboard et
+  // OrderManagementAdmin (hors de mon périmètre) en dépendent encore.
+  const handleCheckout = async ({ paymentMethod, paymentData } = {}) => {
+    try {
+      const lignesCommande = cartItems.map(item => ({
+        produitId: item.id,
+        quantite: item.quantity,
+        prixUnitaire: item.price,
+      }));
+      const commande = await commandeApi.createCommande({
+        clientId: currentUser.id,
+        lignesCommande,
+      });
+
+      const methode = paymentMethod === 'orange-money' ? 'ORANGE_MONEY'
+        : paymentMethod === 'mtn-money' ? 'MOBILE_MONEY'
+        : null;
+
+      if (methode) {
+        await paiementApi.creerPaiement({
+          commandeId: commande.id,
+          consommateurId: currentUser.id,
+          montant: commande.montantTotal,
+          methode,
+          numeroPaiement: paymentData,
+        });
+      }
+      // Paiement carte bancaire : la commande est créée mais paiement-service
+      // ne peut pas encore l'enregistrer (pas de valeur d'enum pour la carte).
+
+      const newOrder = {
+        id: commande.id,
+        id_client: currentUser.id,
+        client: joinNomComplet(currentUser?.prenom, currentUser?.nom) || 'Client',
+        amount: commande.montantTotal,
+        status: 'En attente',
+        date: new Date().toLocaleDateString('fr-FR'),
+        items: cartItems.map(item => ({
+          nomProduit: item.name,
+          quantity: item.quantity,
+          prixUnitaire: item.price,
+          subtotal: item.price * item.quantity,
+        })),
+      };
+      setAdminOrders(prev => [...prev, newOrder]);
+      addNotification(1, 'info', `Nouvelle commande #${commande.id} de ${newOrder.client}`, '/admin/order-management-admin');
+      addNotification(currentUser.id, 'success', `Commande #${commande.id} confirmée !`, '/orders');
+      setCartItems([]);
+      await chargerMesCommandes();
+      navigate('orders');
+    } catch (err) {
+      alert(err?.message || "La création de la commande a échoué.");
+    }
   };
 
   const openSignalement = (product) => {
@@ -579,26 +718,7 @@ export default function App() {
           cartItems={cartItems}
           onRemoveItem={removeFromCart}
           onUpdateQuantity={updateCartItemQuantity}
-          onCheckout={() => {
-            const newOrder = {
-              id: `CMD-${Date.now()}`,
-              client: currentUser?.prenom + ' ' + currentUser?.nom || 'Client',
-              amount: cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-              status: 'En attente',
-              date: new Date().toLocaleDateString('fr-FR'),
-              items: cartItems.map(item => ({
-                nomProduit: item.name,
-                quantity: item.quantity,
-                prixUnitaire: item.price,
-                subtotal: item.price * item.quantity,
-              })),
-            };
-            setAdminOrders(prev => [...prev, newOrder]);
-            addNotification(1, 'info', `Nouvelle commande #${newOrder.id} de ${newOrder.client}`, '/admin/order-management-admin');
-            addNotification(currentUser.id, 'success', `Commande #${newOrder.id} confirmée !`, '/orders');
-            setCartItems([]);
-            navigate('orders');
-          }}
+          onCheckout={handleCheckout}
           onContinueShopping={() => navigate('home')}
         />;
       case 'checkout-wizard':
@@ -606,36 +726,17 @@ export default function App() {
           cartItems={cartItems}
           onRemoveItem={removeFromCart}
           onUpdateQuantity={updateCartItemQuantity}
-          onCheckout={() => {
-            const newOrder = {
-              id: `CMD-${Date.now()}`,
-              client: currentUser?.prenom + ' ' + currentUser?.nom || 'Client',
-              amount: cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0),
-              status: 'En attente',
-              date: new Date().toLocaleDateString('fr-FR'),
-              items: cartItems.map(item => ({
-                nomProduit: item.name,
-                quantity: item.quantity,
-                prixUnitaire: item.price,
-                subtotal: item.price * item.quantity,
-              })),
-            };
-            setAdminOrders(prev => [...prev, newOrder]);
-            addNotification(1, 'info', `Nouvelle commande #${newOrder.id} de ${newOrder.client}`, '/admin/order-management-admin');
-            addNotification(currentUser.id, 'success', `Commande #${newOrder.id} confirmée !`, '/orders');
-            setCartItems([]);
-            navigate('orders');
-          }}
+          onCheckout={handleCheckout}
           onContinueShopping={() => navigate('home')}
         />;
       case 'orders':
         return <ClientOrders
-          orders={adminOrders.filter(o => o.id_client === currentUser?.id)}
+          orders={mesCommandes}
           onBackHome={() => navigate('home')}
         />;
       case 'purchases':
         return <ClientPurchases
-          orders={adminOrders.filter(o => o.id_client === currentUser?.id)}
+          orders={mesCommandes}
           onBackHome={() => navigate('home')}
         />;
       case 'message':
@@ -826,13 +927,17 @@ export default function App() {
         />;
       case 'vendeur-orders':
         return <VendeurOrders
-          orders={adminOrders}
+          orders={toutesLesCommandes}
           vendeurProducts={vendeurProducts}
-          onUpdateOrderStatus={(orderId, newStatus) => {
-            setAdminOrders(prev =>
-              prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o)
-            );
-            addNotification(1, 'info', `Statut de la commande #${orderId} mis à jour : ${newStatus}`, '/admin/order-management-admin');
+          onUpdateOrderStatus={async (orderId, newStatus) => {
+            try {
+              const statutBackend = STATUT_FRANCAIS_TO_BACKEND[newStatus] || newStatus;
+              await commandeApi.updateStatutCommande(orderId, statutBackend);
+              addNotification(1, 'info', `Statut de la commande #${orderId} mis à jour : ${newStatus}`, '/admin/order-management-admin');
+              await chargerToutesLesCommandes();
+            } catch (err) {
+              alert(err?.message || "La mise à jour du statut de la commande a échoué.");
+            }
           }}
         />;
       default:
