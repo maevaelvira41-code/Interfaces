@@ -17,6 +17,7 @@ export const API_URLS = {
   certification: import.meta.env.VITE_CERTIFICATION_SERVICE_URL || 'http://localhost:8086',
   paiement: import.meta.env.VITE_PAIEMENT_SERVICE_URL || 'http://localhost:8087',
   commande: import.meta.env.VITE_COMMANDE_SERVICE_URL || 'http://localhost:8088',
+  notification: import.meta.env.VITE_NOTIFICATION_SERVICE_URL || 'http://localhost:8089',
 };
 
 // Key used to persist the JWT (and basic user info) in localStorage.

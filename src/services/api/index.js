@@ -12,6 +12,7 @@ export * as messageApi from './messageApi';
 export * as avisApi from './avisApi';
 export * as certificationApi from './certificationApi';
 export * as signalementApi from './signalementApi';
+export * as notificationApi from './notificationApi';
 
 export { getSession, isAuthenticated, hasRole, clearSession } from './authSession';
 export { ApiError } from './httpClient';

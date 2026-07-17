@@ -32,12 +32,13 @@ import MyProducts from './components/MyProducts';
 import NotificationsCenter from './components/NotificationsCenter';
 import OrderDetailAdmin from './components/OrderDetailAdmin';
 import ChangePassword from './components/ChangePassword';
-import { authApi, utilisateurApi, produitApi, signalementApi, commandeApi, paiementApi, certificationApi, getSession } from './services/api';
+import { authApi, utilisateurApi, produitApi, signalementApi, commandeApi, paiementApi, certificationApi, notificationApi, getSession } from './services/api';
 import { ROLE_FRONTEND_TO_BACKEND, joinNomComplet, splitNomComplet, mapProfileToFrontendUser } from './services/userMapping';
 import { mapCertificationPourAdmin } from './services/certificationMapping';
 import { mapProduitPourVendeur, construireProduitRequest } from './services/productMapping';
 import { mapSignalementPourAffichage, construireRaison, TYPE_FRONTEND_TO_BACKEND } from './services/signalementMapping';
 import { mapCommandePourAffichage, STATUT_FRANCAIS_TO_BACKEND } from './services/commandeMapping';
+import { mapNotificationPourAffichage, construireNotificationRequest } from './services/notificationMapping';
 
 export default function App() {
   const [screen, setScreen] = useState('home');
@@ -55,8 +56,15 @@ export default function App() {
   const [registeredUsers, setRegisteredUsers] = useState([]);
 
   // ===== NOTIFICATIONS =====
+  // Depuis l'ajout de notification-service côté backend, les
+  // notifications sont persistées et scopées par utilisateur (via le
+  // JWT), et ne vivent plus uniquement dans le localStorage du
+  // navigateur (qui mélangeait auparavant les notifications de tous
+  // les comptes utilisés sur le même appareil).
   const [notifications, setNotifications] = useState([]);
   const addNotification = (userId, type, message, lien = null) => {
+    // Mise à jour optimiste : l'utilisateur voit la notification
+    // apparaître immédiatement, sans attendre le réseau.
     const newNotif = {
       id: `notif-${Date.now()}`,
       utilisateurId: userId,
@@ -67,6 +75,32 @@ export default function App() {
       dateCreation: new Date().toISOString(),
     };
     setNotifications(prev => [newNotif, ...prev]);
+
+    // Envoi réel au backend, en arrière-plan. On avale volontairement
+    // l'erreur : une notification qui échoue à se créer ne doit jamais
+    // faire échouer l'action métier qui l'a déclenchée (commande,
+    // paiement, inscription, etc.).
+    //
+    // Note : on vérifie la session JWT via getSession() plutôt que la
+    // variable currentUser du closure, car addNotification est parfois
+    // appelée juste après setCurrentUser(...) (ex. handleLoginSuccess,
+    // handleRegisterSuccess) — à cet instant currentUser n'a pas encore
+    // été mis à jour (setState est asynchrone), alors que le token JWT,
+    // lui, a déjà été sauvegardé de façon synchrone par authApi.login.
+    if (!getSession()) return; // pas de JWT disponible avant connexion
+    notificationApi
+      .creerNotification(construireNotificationRequest(userId, message, lien))
+      .catch((err) => console.error('Notification non persistée côté serveur :', err));
+  };
+
+  const chargerMesNotifications = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const dtos = await notificationApi.getMesNotifications();
+      setNotifications((dtos || []).map(mapNotificationPourAffichage));
+    } catch (err) {
+      console.error('Impossible de charger vos notifications :', err);
+    }
   };
 
   // ===== COMPTE ADMIN =====
@@ -101,8 +135,6 @@ export default function App() {
     if (savedVerifications) { try { setVendorVerifications(JSON.parse(savedVerifications)); } catch {} }
     const savedSignalements = localStorage.getItem('signalements');
     if (savedSignalements) { try { setSignalements(JSON.parse(savedSignalements)); } catch {} }
-    const savedNotifs = localStorage.getItem('notifications');
-    if (savedNotifs) { try { setNotifications(JSON.parse(savedNotifs)); } catch {} }
     const savedPlan = localStorage.getItem('activePlan');
     if (savedPlan) { setActivePlan(savedPlan); }
     const savedClientMode = localStorage.getItem('isClientMode');
@@ -130,7 +162,6 @@ export default function App() {
   useEffect(() => { localStorage.setItem('cartItems', JSON.stringify(cartItems)); }, [cartItems]);
   useEffect(() => { localStorage.setItem('vendorVerifications', JSON.stringify(vendorVerifications)); }, [vendorVerifications]);
   useEffect(() => { localStorage.setItem('signalements', JSON.stringify(signalements)); }, [signalements]);
-  useEffect(() => { localStorage.setItem('notifications', JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem('activePlan', activePlan); }, [activePlan]);
   useEffect(() => { localStorage.setItem('isClientMode', JSON.stringify(isClientMode)); }, [isClientMode]);
 
@@ -322,6 +353,15 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role]);
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      chargerMesNotifications();
+    } else {
+      setNotifications([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]);
 
   // ===== GARDE AUTH =====
   const requireLogin = (action) => {
@@ -850,12 +890,15 @@ export default function App() {
           notifications={notifications}
           onMarkAsRead={(id) => {
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, lu: true } : n));
+            notificationApi.marquerCommeLu(id).catch((err) => console.error('Échec marquage lu :', err));
           }}
           onMarkAllAsRead={() => {
             setNotifications(prev => prev.map(n => (n.utilisateurId === currentUser.id || n.utilisateurId === 1) ? { ...n, lu: true } : n));
+            notificationApi.marquerToutesLues().catch((err) => console.error('Échec « tout marquer lu » :', err));
           }}
           onDelete={(id) => {
             setNotifications(prev => prev.filter(n => n.id !== id));
+            notificationApi.supprimerNotification(id).catch((err) => console.error('Échec suppression notification :', err));
           }}
           onNavigateToLink={(lien) => {
             if (lien) {
