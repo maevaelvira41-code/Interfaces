@@ -23,8 +23,7 @@ export default function ShoppingCart({
 
   // Calcul des totaux
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const shipping = cartItems.length > 0 ? (subtotal > 50000 ? 0 : 2000) : 0;
-  const total = subtotal + shipping;
+  const total = subtotal;
 
   const handleQuantityChange = (id, newQty) => {
     if (newQty < 1) {
@@ -159,10 +158,6 @@ export default function ShoppingCart({
           <div style={styles.summaryRow}>
             <span>Sous-total</span>
             <span>{subtotal.toLocaleString()} FCFA</span>
-          </div>
-          <div style={styles.summaryRow}>
-            <span>Frais de livraison</span>
-            <span>{shipping === 0 ? 'Offerts' : `${shipping.toLocaleString()} FCFA`}</span>
           </div>
           <div style={styles.divider} />
 
