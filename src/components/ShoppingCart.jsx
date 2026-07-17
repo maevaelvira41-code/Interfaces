@@ -5,7 +5,6 @@ import { ShoppingBag, Trash2, Plus, Minus, ArrowLeft, CreditCard, Truck, Smartph
 const paymentMethods = [
   { id: 'orange-money', label: 'Orange Money', icon: '📱', placeholder: 'Numéro Orange Money (ex: 6X XX XX XX)' },
   { id: 'mtn-money', label: 'MTN Mobile Money', icon: '📱', placeholder: 'Numéro MTN Mobile Money (ex: 6X XX XX XX)' },
-  { id: 'carte', label: 'Carte bancaire (Visa/Mastercard)', icon: '💳', placeholder: 'Numéro de carte (ex: 4111 1111 1111 1111)' },
 ];
 
 export default function ShoppingCart({
@@ -44,21 +43,11 @@ export default function ShoppingCart({
       return;
     }
 
-    // Validation simple du numéro de téléphone (Orange/MTN) ou carte
-    if (paymentMethod === 'orange-money' || paymentMethod === 'mtn-money') {
-      const phoneRegex = /^[6][0-9]{8}$/; // 6X XX XX XX
-      if (!phoneRegex.test(paymentData.replace(/\s/g, ''))) {
-        setPaymentError('Numéro de téléphone invalide (ex: 6X XX XX XX)');
-        return;
-      }
-    }
-
-    if (paymentMethod === 'carte') {
-      const cardRegex = /^[0-9]{16}$/;
-      if (!cardRegex.test(paymentData.replace(/\s/g, ''))) {
-        setPaymentError('Numéro de carte invalide (16 chiffres)');
-        return;
-      }
+    // Validation du numéro de téléphone (Orange/MTN Money)
+    const phoneRegex = /^[6][0-9]{8}$/; // 6X XX XX XX
+    if (!phoneRegex.test(paymentData.replace(/\s/g, ''))) {
+      setPaymentError('Numéro de téléphone invalide (ex: 6X XX XX XX)');
+      return;
     }
 
     setPaymentError('');

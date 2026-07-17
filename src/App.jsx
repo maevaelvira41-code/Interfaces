@@ -348,7 +348,10 @@ export default function App() {
 
   // ===== VALIDATION DE COMMANDE (commande-service + paiement-service) =====
   // Crée la vraie commande, puis le vrai paiement si le moyen choisi est
-  // supporté par paiement-service (ORANGE_MONEY / MOBILE_MONEY / CARTE).
+  // supporté par paiement-service (ORANGE_MONEY / MOBILE_MONEY uniquement :
+  // il n'existe pas de valeur 'CARTE' côté backend, l'option carte a donc
+  // été retirée de ShoppingCart.jsx plutôt que d'envoyer un appel voué à
+  // échouer).
   const handleCheckout = async ({ paymentMethod, paymentData } = {}) => {
     try {
       const lignesCommande = cartItems.map(item => ({
@@ -363,7 +366,6 @@ export default function App() {
 
       const methode = paymentMethod === 'orange-money' ? 'ORANGE_MONEY'
         : paymentMethod === 'mtn-money' ? 'MOBILE_MONEY'
-        : paymentMethod === 'carte' ? 'CARTE'
         : null;
 
       if (methode) {
