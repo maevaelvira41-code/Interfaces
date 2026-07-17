@@ -34,9 +34,10 @@ import MyProducts from './components/MyProducts';
 import NotificationsCenter from './components/NotificationsCenter';
 import OrderDetailAdmin from './components/OrderDetailAdmin';
 import ChangePassword from './components/ChangePassword';
-import { authApi, utilisateurApi, produitApi, getSession } from './services/api';
+import { authApi, utilisateurApi, produitApi, signalementApi, getSession } from './services/api';
 import { ROLE_FRONTEND_TO_BACKEND, joinNomComplet, mapProfileToFrontendUser } from './services/userMapping';
 import { mapProduitPourVendeur, construireProduitRequest } from './services/productMapping';
+import { mapSignalementPourAffichage, construireRaison, TYPE_FRONTEND_TO_BACKEND } from './services/signalementMapping';
 
 export default function App() {
   const [screen, setScreen] = useState('home');
@@ -161,6 +162,51 @@ export default function App() {
       refreshVendeurProducts();
     } else {
       setVendeurProducts([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role]);
+
+  // ===== SIGNALEMENTS (modération admin) =====
+  // Remplace l'ancien stockage local : on va chercher les vrais
+  // signalements auprès de signalement-service, puis on résout le nom
+  // affichable de la cible (produit ou utilisateur) et de l'auteur,
+  // car le backend ne stocke que des IDs.
+  const chargerSignalements = async () => {
+    try {
+      const dtos = await signalementApi.getAllSignalements();
+      const enrichis = await Promise.all(
+        (dtos || []).map(async (dto) => {
+          let cibleNom;
+          try {
+            if (dto.type === 'PRODUIT') {
+              const produit = await produitApi.getProduitById(dto.targetId);
+              cibleNom = produit?.nom;
+            } else {
+              const utilisateur = await utilisateurApi.getUtilisateurById(dto.targetId);
+              cibleNom = utilisateur?.nom;
+            }
+          } catch {
+            cibleNom = undefined; // cible supprimée entretemps : on garde l'ID en repli
+          }
+          let auteurNom;
+          try {
+            const reporter = await utilisateurApi.getUtilisateurById(dto.reporterId);
+            auteurNom = reporter?.nom;
+          } catch {
+            auteurNom = undefined;
+          }
+          return mapSignalementPourAffichage(dto, cibleNom, auteurNom);
+        })
+      );
+      setSignalements(enrichis);
+    } catch (err) {
+      console.error('Impossible de charger les signalements :', err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser?.role === 'admin') {
+      chargerSignalements();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role]);
@@ -385,12 +431,19 @@ export default function App() {
     setRegisteredUsers(prev => prev.map(u => u.id === userId ? { ...u, blocked: !u.blocked } : u));
   };
 
-  const handleSignalerProducteur = (producteur, motif) => {
-    setSignalements(prev => [
-      ...prev,
-      { id: `sig-${Date.now()}`, type: 'utilisateur', cible: producteur.nom, motif, auteur: currentUser?.prenom || 'Client', date: new Date().toISOString(), status: 'pending' },
-    ]);
-    addNotification(1, 'error', `Signalement de ${producteur.nom} par ${currentUser?.prenom || 'un client'}`, '/admin/moderation-panel');
+  const handleSignalerProducteur = async (producteur, motif) => {
+    try {
+      await signalementApi.createSignalement({
+        type: TYPE_FRONTEND_TO_BACKEND.utilisateur,
+        targetId: producteur.id,
+        reporterId: currentUser.id,
+        raison: motif,
+      });
+      addNotification(1, 'error', `Signalement de ${producteur.nom} par ${currentUser?.prenom || 'un client'}`, '/admin/moderation-panel');
+      if (currentUser?.role === 'admin') await chargerSignalements();
+    } catch (err) {
+      alert(err?.message || "L'envoi du signalement a échoué.");
+    }
   };
 
   // ===== NAVIGATION =====
@@ -719,13 +772,23 @@ export default function App() {
       case 'moderation-panel':
         return <ModerationPanel
           signalements={signalements}
-          onResolve={(id) => {
-            setSignalements(prev => prev.map(s => s.id === id ? { ...s, status: 'résolu' } : s));
-            addNotification(1, 'info', `Signalement résolu`, '/admin/moderation-panel');
+          onResolve={async (id) => {
+            try {
+              await signalementApi.updateStatutSignalement(id, 'RESOLU');
+              addNotification(1, 'info', `Signalement résolu`, '/admin/moderation-panel');
+              await chargerSignalements();
+            } catch (err) {
+              alert(err?.message || "La mise à jour du signalement a échoué.");
+            }
           }}
-          onReject={(id) => {
-            setSignalements(prev => prev.map(s => s.id === id ? { ...s, status: 'rejeté' } : s));
-            addNotification(1, 'info', `Signalement rejeté`, '/admin/moderation-panel');
+          onReject={async (id) => {
+            try {
+              await signalementApi.updateStatutSignalement(id, 'REJETE');
+              addNotification(1, 'info', `Signalement rejeté`, '/admin/moderation-panel');
+              await chargerSignalements();
+            } catch (err) {
+              alert(err?.message || "La mise à jour du signalement a échoué.");
+            }
           }}
           onBack={() => navigate('admin-dashboard')}
         />;
@@ -790,16 +853,19 @@ export default function App() {
         <SignalementModal
           product={signalementProduct}
           onClose={() => { setShowSignalement(false); setSignalementProduct(null); }}
-          onSubmit={(data) => {
-            const newSig = {
-              id: `sig-${Date.now()}`,
-              ...data,
-              auteur: currentUser?.prenom || 'Client',
-              date: new Date().toISOString(),
-              status: 'pending',
-            };
-            setSignalements(prev => [...prev, newSig]);
-            addNotification(1, 'error', `Nouveau signalement de ${newSig.cible} par ${newSig.auteur}`, '/admin/moderation-panel');
+          onSubmit={async (data) => {
+            try {
+              await signalementApi.createSignalement({
+                type: TYPE_FRONTEND_TO_BACKEND.produit,
+                targetId: signalementProduct.id,
+                reporterId: currentUser.id,
+                raison: construireRaison(data.motif, data.commentaire),
+              });
+              addNotification(1, 'error', `Nouveau signalement de ${data.cible} par ${currentUser?.prenom || 'Client'}`, '/admin/moderation-panel');
+              if (currentUser?.role === 'admin') await chargerSignalements();
+            } catch (err) {
+              alert(err?.message || "L'envoi du signalement a échoué.");
+            }
           }}
         />
       )}
