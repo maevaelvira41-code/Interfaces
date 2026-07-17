@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import {
-  ArrowLeft, ShieldCheck, FileText, GraduationCap, CheckCircle,
-  XCircle, Clock, AlertCircle, User, Phone, Mail, Search,
+  ArrowLeft, ShieldCheck, FileText, CreditCard, CheckCircle,
+  XCircle, Clock, AlertCircle, Phone, Mail, Search, Wallet,
 } from 'lucide-react';
 
-// pendingVerifications: [{ id, prenom, nom, email, telephone, idDocuments, trainingInstitution,
-//   trainingCertificate, attestationNumber, trainingYear, submittedAt, status }]
-export default function VendorVerificationAdmin({ pendingVerifications = [], onApprove, onReject, onBack }) {
+// pendingVerifications: [{ id, producteurId, prenom, nom, email, telephone,
+//   typeDocument, typeDocumentLabel, idRecto, idVerso, photoUtilisateur,
+//   dureeMois, montant, moyenPaiement, moyenPaiementLabel, numeroPaiement,
+//   statutPaiement ('EN_ATTENTE'|'PAYE'|'NON_PAYE'), submittedAt, status,
+//   motifRejet }]
+export default function VendorVerificationAdmin({ pendingVerifications = [], onApprove, onReject, onConfirmerPaiement, onBack }) {
   const [selectedId, setSelectedId] = useState(pendingVerifications[0]?.id ?? null);
   const [search, setSearch] = useState('');
   const [rejectReason, setRejectReason] = useState('');
@@ -27,6 +30,17 @@ export default function VendorVerificationAdmin({ pendingVerifications = [], onA
     if (status === 'approved') return { label: '✅ Approuvé', bg: '#e9f5ee', color: '#2d6a4f' };
     if (status === 'rejected') return { label: '❌ Rejeté', bg: '#fdecea', color: '#c0392b' };
     return { label: '⏳ En attente', bg: '#fff8e8', color: '#f5b041' };
+  };
+
+  const paiementBadge = (statutPaiement) => {
+    if (statutPaiement === 'PAYE') return { label: '✅ Payé', bg: '#e9f5ee', color: '#2d6a4f' };
+    if (statutPaiement === 'NON_PAYE') return { label: '❌ Non payé', bg: '#fdecea', color: '#c0392b' };
+    return { label: '⏳ En attente de confirmation', bg: '#fff8e8', color: '#f5b041' };
+  };
+
+  const handleConfirmerPaiement = () => {
+    if (!selected) return;
+    onConfirmerPaiement && onConfirmerPaiement(selected.id);
   };
 
   const handleApprove = () => {
@@ -143,15 +157,27 @@ export default function VendorVerificationAdmin({ pendingVerifications = [], onA
                 </div>
 
                 <div style={styles.section}>
-                  <h3 style={styles.sectionTitle}><FileText size={16} color="#2d6a4f" /> Pièce d'identité</h3>
-                  {selected.idDocuments?.length > 0 ? (
-                    <div style={styles.fileList}>
-                      {selected.idDocuments.map((doc, i) => (
-                        <div key={i} style={styles.fileItem}>
-                          <FileText size={14} color="#2d6a4f" /> {doc.name}
-                          <span style={styles.fileSize}>{doc.size}</span>
+                  <h3 style={styles.sectionTitle}><FileText size={16} color="#2d6a4f" /> {selected.typeDocumentLabel || "Pièce d'identité"}</h3>
+                  {(selected.idRecto || selected.idVerso || selected.photoUtilisateur) ? (
+                    <div style={styles.photoGrid}>
+                      {selected.idRecto && (
+                        <div style={styles.photoItem}>
+                          <img src={selected.idRecto} alt="Recto" style={styles.photoImg} />
+                          <span style={styles.photoCaption}>Recto</span>
                         </div>
-                      ))}
+                      )}
+                      {selected.idVerso && (
+                        <div style={styles.photoItem}>
+                          <img src={selected.idVerso} alt="Verso" style={styles.photoImg} />
+                          <span style={styles.photoCaption}>Verso</span>
+                        </div>
+                      )}
+                      {selected.photoUtilisateur && (
+                        <div style={styles.photoItem}>
+                          <img src={selected.photoUtilisateur} alt="Photo du titulaire" style={styles.photoImg} />
+                          <span style={styles.photoCaption}>Titulaire</span>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <p style={styles.missing}>Aucun document fourni</p>
@@ -159,40 +185,51 @@ export default function VendorVerificationAdmin({ pendingVerifications = [], onA
                 </div>
 
                 <div style={styles.section}>
-                  <h3 style={styles.sectionTitle}><GraduationCap size={16} color="#2d6a4f" /> Formation agropastorale</h3>
+                  <h3 style={styles.sectionTitle}><CreditCard size={16} color="#2d6a4f" /> Détails de la demande</h3>
                   <div style={styles.infoGrid}>
                     <div style={styles.infoRow}>
-                      <span style={styles.infoLabel}>Établissement</span>
-                      <span style={styles.infoValue}>{selected.trainingInstitution || '—'}</span>
+                      <span style={styles.infoLabel}>Durée demandée</span>
+                      <span style={styles.infoValue}>{selected.dureeMois} mois</span>
                     </div>
                     <div style={styles.infoRow}>
-                      <span style={styles.infoLabel}>N° d'attestation</span>
-                      <span style={styles.infoValue}>{selected.attestationNumber || '—'}</span>
+                      <span style={styles.infoLabel}>Montant</span>
+                      <span style={styles.infoValue}>{selected.montant} FCFA</span>
                     </div>
                     <div style={styles.infoRow}>
-                      <span style={styles.infoLabel}>Année</span>
-                      <span style={styles.infoValue}>{selected.trainingYear || '—'}</span>
+                      <span style={styles.infoLabel}>Moyen de paiement</span>
+                      <span style={styles.infoValue}>{selected.moyenPaiementLabel || '—'}</span>
+                    </div>
+                    <div style={styles.infoRow}>
+                      <span style={styles.infoLabel}>N° de paiement utilisé</span>
+                      <span style={styles.infoValue}>{selected.numeroPaiement || '—'}</span>
                     </div>
                   </div>
-                  {selected.trainingCertificate?.length > 0 ? (
-                    <div style={styles.fileList}>
-                      {selected.trainingCertificate.map((doc, i) => (
-                        <div key={i} style={styles.fileItem}>
-                          <GraduationCap size={14} color="#2d6a4f" /> {doc.name}
-                          <span style={styles.fileSize}>{doc.size}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p style={styles.missing}>Aucune attestation fournie</p>
+                </div>
+
+                <div style={styles.section}>
+                  <h3 style={styles.sectionTitle}><Wallet size={16} color="#2d6a4f" /> Statut du paiement</h3>
+                  <span
+                    style={{
+                      ...styles.statusPill,
+                      backgroundColor: paiementBadge(selected.statutPaiement).bg,
+                      color: paiementBadge(selected.statutPaiement).color,
+                    }}
+                  >
+                    {paiementBadge(selected.statutPaiement).label}
+                  </span>
+                  {selected.status === 'pending' && selected.statutPaiement !== 'PAYE' && (
+                    <button style={styles.confirmPaymentBtn} onClick={handleConfirmerPaiement}>
+                      Confirmer la réception du paiement
+                    </button>
                   )}
                 </div>
 
                 <div style={styles.tipBox}>
                   <AlertCircle size={16} color="#e07a5f" />
                   <span style={styles.tipText}>
-                    Vérifiez que le numéro d'attestation correspond bien à l'établissement déclaré
-                    avant d'approuver. En cas de doute, rejetez avec un motif clair.
+                    Vérifiez que le paiement a bien été reçu sur le numéro indiqué avant de le
+                    confirmer. L'approbation n'est possible qu'une fois le paiement confirmé.
+                    En cas de doute sur les documents, rejetez avec un motif clair.
                   </span>
                 </div>
 
@@ -203,7 +240,15 @@ export default function VendorVerificationAdmin({ pendingVerifications = [], onA
                         <button style={styles.rejectBtn} onClick={() => setShowRejectBox(true)}>
                           <XCircle size={18} /> Rejeter
                         </button>
-                        <button style={styles.approveBtn} onClick={handleApprove}>
+                        <button
+                          style={{
+                            ...styles.approveBtn,
+                            ...(selected.statutPaiement !== 'PAYE' ? styles.approveBtnDisabled : {}),
+                          }}
+                          onClick={handleApprove}
+                          disabled={selected.statutPaiement !== 'PAYE'}
+                          title={selected.statutPaiement !== 'PAYE' ? 'Confirmez le paiement avant d\'approuver' : ''}
+                        >
                           <CheckCircle size={18} /> Approuver
                         </button>
                       </div>
@@ -213,7 +258,7 @@ export default function VendorVerificationAdmin({ pendingVerifications = [], onA
                         <textarea
                           style={styles.textarea}
                           rows="3"
-                          placeholder="Ex: document illisible, numéro d'attestation invalide..."
+                          placeholder="Ex: document illisible, photo ne correspond pas..."
                           value={rejectReason}
                           onChange={(e) => setRejectReason(e.target.value)}
                         />
@@ -231,7 +276,9 @@ export default function VendorVerificationAdmin({ pendingVerifications = [], onA
                 {selected.status !== 'pending' && (
                   <div style={styles.decidedBox}>
                     <Clock size={16} color="#6c757d" />
-                    <span>Cette demande a déjà été traitée.</span>
+                    <span>
+                      Cette demande a déjà été traitée{selected.status === 'rejected' && selected.motifRejet ? ` (motif : ${selected.motifRejet})` : ''}.
+                    </span>
                   </div>
                 )}
               </>
@@ -256,7 +303,6 @@ const styles = {
 
   grid: { display: 'grid', gridTemplateColumns: '340px 1fr', gap: '24px', alignItems: 'start' },
 
-  // Liste
   listPanel: { backgroundColor: '#ffffff', borderRadius: '20px', border: '1px solid #e9ecef', padding: '16px', boxShadow: '0 8px 24px rgba(0,0,0,0.03)' },
   searchWrap: { display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', backgroundColor: '#f8f9fa', borderRadius: '12px', border: '1px solid #e9ecef', marginBottom: '12px' },
   searchInput: { flex: 1, border: 'none', backgroundColor: 'transparent', outline: 'none', fontSize: '13px' },
@@ -270,7 +316,6 @@ const styles = {
   listItemEmail: { fontSize: '11.5px', color: '#adb5bd', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   miniBadge: { fontSize: '10px', fontWeight: '800', padding: '3px 8px', borderRadius: '20px', whiteSpace: 'nowrap' },
 
-  // Détail
   detailPanel: { backgroundColor: '#ffffff', borderRadius: '20px', border: '1px solid #e9ecef', padding: '28px', boxShadow: '0 8px 24px rgba(0,0,0,0.03)', minHeight: '400px' },
   emptyState: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', color: '#adb5bd', fontSize: '14px', padding: '80px 0' },
 
@@ -284,21 +329,26 @@ const styles = {
 
   section: { marginBottom: '20px' },
   sectionTitle: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: '800', color: '#212529', margin: '0 0 10px 0' },
-  fileList: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  fileItem: { display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', backgroundColor: '#f8f9fa', borderRadius: '10px', fontSize: '12.5px', color: '#212529', fontWeight: '600', border: '1px solid #e9ecef' },
-  fileSize: { marginLeft: 'auto', fontSize: '11px', color: '#adb5bd', fontWeight: '500' },
   missing: { fontSize: '12.5px', color: '#e07a5f', fontWeight: '600', fontStyle: 'italic' },
+
+  photoGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' },
+  photoItem: { display: 'flex', flexDirection: 'column', gap: '4px' },
+  photoImg: { width: '100%', aspectRatio: '4/3', objectFit: 'cover', borderRadius: '10px', border: '1px solid #e9ecef' },
+  photoCaption: { fontSize: '11px', color: '#6c757d', fontWeight: '600', textAlign: 'center' },
 
   infoGrid: { display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px' },
   infoRow: { display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px dashed #f1f3f5' },
   infoLabel: { fontSize: '12.5px', color: '#6c757d', fontWeight: '600' },
   infoValue: { fontSize: '12.5px', color: '#212529', fontWeight: '700', textAlign: 'right' },
 
+  confirmPaymentBtn: { display: 'block', marginTop: '10px', padding: '10px 16px', backgroundColor: '#f0f7f4', color: '#2d6a4f', border: '1.5px solid #b7e4c7', borderRadius: '12px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' },
+
   tipBox: { display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '14px', backgroundColor: '#fff5f2', borderRadius: '12px', border: '1px solid #f5d4c8', marginBottom: '20px' },
   tipText: { fontSize: '12px', color: '#495057', lineHeight: '1.5' },
 
   actionRow: { display: 'flex', gap: '12px' },
   approveBtn: { flex: 1, padding: '14px', backgroundColor: '#2d6a4f', color: '#ffffff', border: 'none', borderRadius: '14px', fontSize: '14px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
+  approveBtnDisabled: { backgroundColor: '#adb5bd', cursor: 'not-allowed' },
   rejectBtn: { flex: 1, padding: '14px', backgroundColor: '#fdecea', color: '#c0392b', border: '1px solid #f5c6c0', borderRadius: '14px', fontSize: '14px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
   rejectConfirmBtn: { flex: 2, padding: '14px', backgroundColor: '#c0392b', color: '#ffffff', border: 'none', borderRadius: '14px', fontSize: '14px', fontWeight: '800', cursor: 'pointer' },
   backBtnSmall: { flex: 1, padding: '14px', backgroundColor: '#f1f3f5', color: '#495057', border: 'none', borderRadius: '14px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' },

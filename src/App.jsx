@@ -32,8 +32,9 @@ import MyProducts from './components/MyProducts';
 import NotificationsCenter from './components/NotificationsCenter';
 import OrderDetailAdmin from './components/OrderDetailAdmin';
 import ChangePassword from './components/ChangePassword';
-import { authApi, utilisateurApi, produitApi, signalementApi, commandeApi, paiementApi, getSession } from './services/api';
-import { ROLE_FRONTEND_TO_BACKEND, joinNomComplet, mapProfileToFrontendUser } from './services/userMapping';
+import { authApi, utilisateurApi, produitApi, signalementApi, commandeApi, paiementApi, certificationApi, getSession } from './services/api';
+import { mapCertificationPourAdmin } from './services/certificationMapping';
+import { ROLE_FRONTEND_TO_BACKEND, joinNomComplet, splitNomComplet, mapProfileToFrontendUser } from './services/userMapping';
 import { mapProduitPourVendeur, construireProduitRequest } from './services/productMapping';
 import { mapSignalementPourAffichage, construireRaison, TYPE_FRONTEND_TO_BACKEND } from './services/signalementMapping';
 import { mapCommandePourAffichage, STATUT_FRANCAIS_TO_BACKEND } from './services/commandeMapping';
@@ -210,9 +211,37 @@ export default function App() {
     if (currentUser?.role === 'admin') {
       chargerSignalements();
       chargerUtilisateurs();
+      chargerCertificationsEnAttente();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role]);
+
+  // ===== CERTIFICATIONS EN ATTENTE (vérification vendeurs, admin) =====
+  // Remplace l'ancien stockage local (vendorVerifications, jamais rempli
+  // en pratique) : vraies demandes depuis certification-service, avec
+  // le nom/email/téléphone du producteur résolus via utilisateur-service
+  // (certification-service ne connaît que producteurId).
+  const chargerCertificationsEnAttente = async () => {
+    try {
+      const dtos = await certificationApi.getCertificationsEnAttente();
+      const enrichies = await Promise.all(
+        (dtos || []).map(async (dto) => {
+          let producteurInfo = {};
+          try {
+            const producteur = await utilisateurApi.getUtilisateurById(dto.producteurId);
+            const { prenom, nom } = splitNomComplet(producteur?.nom);
+            producteurInfo = { prenom, nom, email: producteur?.email, telephone: producteur?.telephone };
+          } catch {
+            // producteur introuvable : mapCertificationPourAdmin retombe sur des valeurs par défaut
+          }
+          return mapCertificationPourAdmin(dto, producteurInfo);
+        })
+      );
+      setVendorVerifications(enrichies);
+    } catch (err) {
+      console.error('Impossible de charger les certifications en attente :', err);
+    }
+  };
 
   // ===== UTILISATEURS (liste admin) =====
   // Remplace l'ancien stockage local/localStorage : liste réelle depuis
@@ -573,8 +602,32 @@ export default function App() {
   };
 
   // ===== APPROBATION / REJET =====
-  const handleApproveVerification = (id) => {};
-  const handleRejectVerification = (id) => {};
+  const handleConfirmerPaiementVerification = async (id) => {
+    try {
+      await certificationApi.confirmerPaiementCertification(id, { paye: true });
+      await chargerCertificationsEnAttente();
+    } catch (err) {
+      alert(err?.message || "La confirmation du paiement a échoué.");
+    }
+  };
+
+  const handleApproveVerification = async (id) => {
+    try {
+      await certificationApi.reviserCertification(id, { approuve: true });
+      await chargerCertificationsEnAttente();
+    } catch (err) {
+      alert(err?.message || "L'approbation a échoué.");
+    }
+  };
+
+  const handleRejectVerification = async (id, motifRejet) => {
+    try {
+      await certificationApi.reviserCertification(id, { approuve: false, motifRejet });
+      await chargerCertificationsEnAttente();
+    } catch (err) {
+      alert(err?.message || "Le rejet a échoué.");
+    }
+  };
   const handleToggleUserBlocked = async (userId) => {
     const user = registeredUsers.find(u => u.id === userId);
     if (!user) return;
@@ -931,6 +984,7 @@ export default function App() {
           pendingVerifications={vendorVerifications}
           onApprove={handleApproveVerification}
           onReject={handleRejectVerification}
+          onConfirmerPaiement={handleConfirmerPaiementVerification}
           onBack={() => navigate('admin-dashboard')}
         />;
       case 'producer-profile':
