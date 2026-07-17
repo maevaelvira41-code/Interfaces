@@ -209,9 +209,22 @@ export default function App() {
   useEffect(() => {
     if (currentUser?.role === 'admin') {
       chargerSignalements();
+      chargerUtilisateurs();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role]);
+
+  // ===== UTILISATEURS (liste admin) =====
+  // Remplace l'ancien stockage local/localStorage : liste réelle depuis
+  // utilisateur-service pour le dashboard admin (comptage, blocage...).
+  const chargerUtilisateurs = async () => {
+    try {
+      const dtos = await utilisateurApi.getAllUtilisateurs();
+      setRegisteredUsers((dtos || []).map((dto) => mapProfileToFrontendUser(dto, [dto.role])));
+    } catch (err) {
+      console.error('Impossible de charger les utilisateurs :', err);
+    }
+  };
 
   // ===== COMMANDES (commande-service) =====
   // commande-service ne renvoie que des IDs (produitId, clientId) : on
@@ -562,8 +575,15 @@ export default function App() {
   // ===== APPROBATION / REJET =====
   const handleApproveVerification = (id) => {};
   const handleRejectVerification = (id) => {};
-  const handleToggleUserBlocked = (userId) => {
-    setRegisteredUsers(prev => prev.map(u => u.id === userId ? { ...u, blocked: !u.blocked } : u));
+  const handleToggleUserBlocked = async (userId) => {
+    const user = registeredUsers.find(u => u.id === userId);
+    if (!user) return;
+    try {
+      await utilisateurApi.changerStatutBlocage(userId, !user.blocked);
+      await chargerUtilisateurs();
+    } catch (err) {
+      alert(err?.message || "Le changement de statut a échoué.");
+    }
   };
 
   const handleSignalerProducteur = async (producteur, motif) => {

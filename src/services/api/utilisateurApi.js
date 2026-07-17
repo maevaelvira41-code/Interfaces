@@ -46,3 +46,10 @@ export const deleteUtilisateur = (id) => httpDelete(BASE, `/api/utilisateurs/${i
  */
 export const changerMotDePasse = (id, ancienMotDePasse, nouveauMotDePasse) =>
   httpPut(BASE, `/api/utilisateurs/${id}/mot-de-passe`, { ancienMotDePasse, nouveauMotDePasse });
+
+/**
+ * Block/unblock a user account (admin only). PUT /api/utilisateurs/{id}/blocage.
+ * A blocked user can no longer log in (enforced by auth-service).
+ */
+export const changerStatutBlocage = (id, bloque) =>
+  httpPut(BASE, `/api/utilisateurs/${id}/blocage`, { bloque });
