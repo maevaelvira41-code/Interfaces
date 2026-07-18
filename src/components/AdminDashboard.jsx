@@ -17,6 +17,7 @@ const navItems = [
 export default function AdminDashboard({
   onNavigate,
   onApproveCertification,
+  onRejectCertification,
   onNavigateToVendorVerification,
   onNavigateToModeration,
   pendingVerificationCount = 0,
@@ -84,20 +85,17 @@ export default function AdminDashboard({
   };
 
   // ===== ACTIONS CERTIFICATIONS =====
-  const handleApprove = (id) => {
-    // On appelle le callback passé par App
-    if (onApproveCertification) onApproveCertification(id);
+  const handleApprove = async (id) => {
+    // On appelle le vrai handler passé par App (certificationApi.reviserCertification)
+    if (onApproveCertification) await onApproveCertification(id);
     setSelectedCert(null);
     showToast('✅ Certification approuvée avec succès !');
   };
 
-  const handleReject = (id) => {
+  const handleReject = async (id) => {
     if (!rejectReason.trim()) { alert('Veuillez indiquer une raison de rejet'); return; }
-    // On appelle le callback passé par App
-    const rejectFn = (id) => {
-      // Simulé : dans App, on gère via handleRejectVerification
-    };
-    rejectFn(id);
+    // On appelle le vrai handler passé par App (certificationApi.reviserCertification)
+    if (onRejectCertification) await onRejectCertification(id, rejectReason);
     setShowRejectModal(false);
     setSelectedCert(null);
     setRejectReason('');

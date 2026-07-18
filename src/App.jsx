@@ -1001,6 +1001,8 @@ export default function App() {
           notifications={notifications}
           onNavigate={navigate}
           onLogout={handleLogout}
+          onApproveCertification={handleApproveVerification}
+          onRejectCertification={handleRejectVerification}
         />;
       case 'order-management-admin':
         return <OrderManagementAdmin
