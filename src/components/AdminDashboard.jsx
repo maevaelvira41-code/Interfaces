@@ -25,10 +25,20 @@ export default function AdminDashboard({
   vendorVerifications = [],
   signalements = [],
   onToggleUserBlocked,
+  // Ajoutés pour brancher le badge de notifications sur les vraies
+  // données (notification-service) plutôt qu'un compteur figé.
+  notifications = [],
+  currentUser = null,
 }) {
   const [activeNav, setActiveNav] = useState('home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [notifCount, setNotifCount] = useState(3);
+  // Anciennement : const [notifCount, setNotifCount] = useState(3) — un
+  // compteur figé, jamais connecté aux vraies notifications. Calculé
+  // maintenant à partir des notifications réellement non lues de
+  // l'utilisateur connecté (même logique que NavigationConsole.jsx).
+  const notifCount = currentUser
+    ? notifications.filter(n => n.utilisateurId === currentUser.id && !n.lu).length
+    : 0;
   const [toast, setToast] = useState('');
   const [hoveredBar, setHoveredBar] = useState(null);
   const [selectedCert, setSelectedCert] = useState(null);
@@ -78,7 +88,6 @@ export default function AdminDashboard({
     // On appelle le callback passé par App
     if (onApproveCertification) onApproveCertification(id);
     setSelectedCert(null);
-    setNotifCount(n => Math.max(0, n - 1));
     showToast('✅ Certification approuvée avec succès !');
   };
 

@@ -88,9 +88,42 @@ export default function App() {
     // été mis à jour (setState est asynchrone), alors que le token JWT,
     // lui, a déjà été sauvegardé de façon synchrone par authApi.login.
     if (!getSession()) return; // pas de JWT disponible avant connexion
+    // On transmet directement "type" (la sévérité UI choisie par
+    // l'appelant : info/success/warning/error) au backend en tant que
+    // "niveau" — plus besoin de la redeviner au chargement, puisque
+    // notification-service la stocke désormais telle quelle.
     notificationApi
-      .creerNotification(construireNotificationRequest(userId, message, lien))
+      .creerNotification(construireNotificationRequest(userId, message, lien, type))
       .catch((err) => console.error('Notification non persistée côté serveur :', err));
+  };
+
+  // ===== IDENTIFIANTS ADMIN RÉELS =====
+  // Remplace le précédent broadcast codé en dur vers userId=1 : on
+  // récupère les vrais comptes ADMIN auprès de utilisateur-service
+  // (GET /api/utilisateurs est public, donc accessible même avant
+  // connexion) et on notifie chacun d'eux individuellement.
+  const [adminIds, setAdminIds] = useState([]);
+  useEffect(() => {
+    utilisateurApi
+      .getAllUtilisateurs()
+      .then((tous) => {
+        const ids = (tous || [])
+          .filter((u) => u.role === 'ADMIN')
+          .map((u) => u.id);
+        setAdminIds(ids);
+      })
+      .catch((err) => console.error("Impossible de récupérer la liste des comptes admin :", err));
+  }, []);
+
+  const notifierAdmins = (type, message, lien = null) => {
+    if (adminIds.length === 0) {
+      // Repli si la liste n'a pas encore été chargée (ex. tout début du
+      // chargement de l'app) : on garde l'ancien comportement plutôt que
+      // de perdre silencieusement la notification.
+      addNotification(1, type, message, lien);
+      return;
+    }
+    adminIds.forEach((id) => addNotification(id, type, message, lien));
   };
 
   const chargerMesNotifications = async () => {
@@ -447,7 +480,7 @@ export default function App() {
         });
       }
 
-      addNotification(1, 'info', `Nouvelle commande #${commande.id} de ${joinNomComplet(currentUser?.prenom, currentUser?.nom) || 'Client'}`, '/admin/order-management-admin');
+      notifierAdmins('info', `Nouvelle commande #${commande.id} de ${joinNomComplet(currentUser?.prenom, currentUser?.nom) || 'Client'}`, '/admin/order-management-admin');
       addNotification(currentUser.id, 'success', `Commande #${commande.id} confirmée !`, '/orders');
       setCartItems([]);
       await chargerMesCommandes();
@@ -479,7 +512,7 @@ export default function App() {
     setCurrentUser(updatedUser);
     setRegisteredUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
     setActivePlan(plan.id);
-    addNotification(1, 'info', `${currentUser.prenom} ${currentUser.nom} a changé pour le plan ${plan.name}`, '/admin/dashboard');
+    notifierAdmins('info', `${currentUser.prenom} ${currentUser.nom} a changé pour le plan ${plan.name}`, '/admin/dashboard');
     addNotification(currentUser.id, 'success', `Votre abonnement ${plan.name} est désormais actif !`, '/seller-dashboard');
     alert(`✅ Abonnement ${plan.name} activé avec succès !`);
     navigate('seller-dashboard');
@@ -508,7 +541,7 @@ export default function App() {
     if (userData.role === 'vendeur') {
       setActivePlan(userData.plan || 'gratuit');
     }
-    addNotification(1, 'info', `${userData.prenom} ${userData.nom} (${userData.role}) s'est connecté`, null);
+    notifierAdmins('info', `${userData.prenom} ${userData.nom} (${userData.role}) s'est connecté`, null);
     addNotification(userData.id, 'success', `Bienvenue ${userData.prenom} ! Vous êtes connecté.`, '/profil');
 
     setIsClientMode(false);
@@ -554,7 +587,7 @@ export default function App() {
 
     const newUser = await validateLogin(email, password, role);
 
-    addNotification(1, 'info', `Nouvel utilisateur inscrit : ${prenom} ${nom} (${role})`, '/admin/dashboard');
+    notifierAdmins('info', `Nouvel utilisateur inscrit : ${prenom} ${nom} (${role})`, '/admin/dashboard');
     addNotification(newUser.id, 'success', `Bienvenue ${prenom} ! Votre compte a été créé.`, '/profil');
 
     setActivePlan(newUser.plan);
@@ -671,7 +704,7 @@ export default function App() {
         reporterId: currentUser.id,
         raison: motif,
       });
-      addNotification(1, 'error', `Signalement de ${producteur.nom} par ${currentUser?.prenom || 'un client'}`, '/admin/moderation-panel');
+      notifierAdmins('error', `Signalement de ${producteur.nom} par ${currentUser?.prenom || 'un client'}`, '/admin/moderation-panel');
       if (currentUser?.role === 'admin') await chargerSignalements();
     } catch (err) {
       alert(err?.message || "L'envoi du signalement a échoué.");
@@ -934,7 +967,7 @@ export default function App() {
             setCurrentUser(updatedUser);
             setRegisteredUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
             setActivePlan(plan.id);
-            addNotification(1, 'info', `${currentUser.prenom} ${currentUser.nom} a changé pour le plan ${plan.name}`, '/admin/dashboard');
+            notifierAdmins('info', `${currentUser.prenom} ${currentUser.nom} a changé pour le plan ${plan.name}`, '/admin/dashboard');
             addNotification(currentUser.id, 'success', `Votre abonnement ${plan.name} est désormais actif !`, '/seller-dashboard');
             alert(`✅ Abonnement ${plan.name} activé avec succès !`);
           }}
@@ -942,7 +975,7 @@ export default function App() {
             try {
               const statutBackend = STATUT_FRANCAIS_TO_BACKEND[newStatus] || newStatus;
               await commandeApi.updateStatutCommande(orderId, statutBackend);
-              addNotification(1, 'info', `Statut de la commande #${orderId} mis à jour : ${newStatus}`, '/admin/order-management-admin');
+              notifierAdmins('info', `Statut de la commande #${orderId} mis à jour : ${newStatus}`, '/admin/order-management-admin');
               await chargerToutesLesCommandes();
             } catch (err) {
               alert(err?.message || "La mise à jour du statut de la commande a échoué.");
@@ -971,6 +1004,7 @@ export default function App() {
           signalements={signalements}
           vendeurProducts={vendeurProducts}
           currentUser={currentUser}
+          notifications={notifications}
           onNavigate={navigate}
           onLogout={handleLogout}
         />;
@@ -993,7 +1027,7 @@ export default function App() {
           onResolve={async (id) => {
             try {
               await signalementApi.updateStatutSignalement(id, 'RESOLU');
-              addNotification(1, 'info', `Signalement résolu`, '/admin/moderation-panel');
+              notifierAdmins('info', `Signalement résolu`, '/admin/moderation-panel');
               await chargerSignalements();
             } catch (err) {
               alert(err?.message || "La mise à jour du signalement a échoué.");
@@ -1002,7 +1036,7 @@ export default function App() {
           onReject={async (id) => {
             try {
               await signalementApi.updateStatutSignalement(id, 'REJETE');
-              addNotification(1, 'info', `Signalement rejeté`, '/admin/moderation-panel');
+              notifierAdmins('info', `Signalement rejeté`, '/admin/moderation-panel');
               await chargerSignalements();
             } catch (err) {
               alert(err?.message || "La mise à jour du signalement a échoué.");
@@ -1035,7 +1069,7 @@ export default function App() {
             try {
               const statutBackend = STATUT_FRANCAIS_TO_BACKEND[newStatus] || newStatus;
               await commandeApi.updateStatutCommande(orderId, statutBackend);
-              addNotification(1, 'info', `Statut de la commande #${orderId} mis à jour : ${newStatus}`, '/admin/order-management-admin');
+              notifierAdmins('info', `Statut de la commande #${orderId} mis à jour : ${newStatus}`, '/admin/order-management-admin');
               await chargerToutesLesCommandes();
             } catch (err) {
               alert(err?.message || "La mise à jour du statut de la commande a échoué.");
@@ -1084,7 +1118,7 @@ export default function App() {
                 reporterId: currentUser.id,
                 raison: construireRaison(data.motif, data.commentaire),
               });
-              addNotification(1, 'error', `Nouveau signalement de ${data.cible} par ${currentUser?.prenom || 'Client'}`, '/admin/moderation-panel');
+              notifierAdmins('error', `Nouveau signalement de ${data.cible} par ${currentUser?.prenom || 'Client'}`, '/admin/moderation-panel');
               if (currentUser?.role === 'admin') await chargerSignalements();
             } catch (err) {
               alert(err?.message || "L'envoi du signalement a échoué.");
