@@ -18,6 +18,7 @@ export default function AdminDashboard({
   onNavigate,
   onApproveCertification,
   onRejectCertification,
+  onConfirmerPaiement,
   onNavigateToVendorVerification,
   onNavigateToModeration,
   pendingVerificationCount = 0,
@@ -100,6 +101,26 @@ export default function AdminDashboard({
     if (onApproveCertification) await onApproveCertification(id);
     setSelectedCert(null);
     showToast('✅ Certification approuvée avec succès !');
+  };
+
+  // Le paiement doit être confirmé avant qu'une certification puisse être
+  // approuvée — le backend refuse l'approbation sinon (voir
+  // CertificationService.reviser : "Paiement non confirmé"). Ce bouton
+  // manquait ici alors que l'appel existait déjà côté App.jsx.
+  const handleConfirmerPaiement = async (id) => {
+    if (!onConfirmerPaiement) return;
+    try {
+      await onConfirmerPaiement(id);
+      showToast('💳 Paiement confirmé.');
+    } catch (err) {
+      alert(err?.message || "La confirmation du paiement a échoué.");
+    }
+  };
+
+  const paiementBadge = (statutPaiement) => {
+    if (statutPaiement === 'PAYE') return { label: '✅ Payé', bg: '#e9f5ee', color: '#2d6a4f' };
+    if (statutPaiement === 'NON_PAYE') return { label: '❌ Non payé', bg: '#fdecea', color: '#c0392b' };
+    return { label: '⏳ En attente de confirmation', bg: '#fff8e8', color: '#f5b041' };
   };
 
   const handleReject = async (id) => {
@@ -193,12 +214,18 @@ export default function AdminDashboard({
                 <span style={styles.detailValue}>📍 {selectedCert.location || 'Non renseignée'}</span>
               </div>
               <div style={styles.detailItem}>
-                <span style={styles.detailLabel}>Documents</span>
-                <span style={styles.detailValue}>📄 {selectedCert.documents ? selectedCert.documents.length : 0} fichier(s)</span>
+                <span style={styles.detailLabel}>Paiement</span>
+                <span style={{
+                  ...styles.statusBadge,
+                  color: paiementBadge(selectedCert.statutPaiement).color,
+                  backgroundColor: paiementBadge(selectedCert.statutPaiement).bg,
+                }}>
+                  {paiementBadge(selectedCert.statutPaiement).label}
+                </span>
               </div>
               <div style={styles.detailItem}>
                 <span style={styles.detailLabel}>Date de demande</span>
-                <span style={styles.detailValue}>📅 {selectedCert.dateDemande ? new Date(selectedCert.dateDemande).toLocaleDateString('fr-FR') : 'N/A'}</span>
+                <span style={styles.detailValue}>📅 {selectedCert.submittedAt ? new Date(selectedCert.submittedAt).toLocaleDateString('fr-FR') : 'N/A'}</span>
               </div>
               <div style={styles.detailItem}>
                 <span style={styles.detailLabel}>Statut</span>
@@ -212,19 +239,62 @@ export default function AdminDashboard({
               </div>
             </div>
 
-            {selectedCert.rejectReason && (
+            {/* Documents envoyés — chaque vignette ouvre le document en
+                pleine résolution dans un nouvel onglet. */}
+            <div style={styles.docsSection}>
+              <span style={styles.detailLabel}>Documents envoyés</span>
+              {(selectedCert.idRecto || selectedCert.idVerso || selectedCert.photoUtilisateur) ? (
+                <div style={styles.docsGrid}>
+                  {selectedCert.idRecto && (
+                    <a href={selectedCert.idRecto} target="_blank" rel="noreferrer" style={styles.docLink}>
+                      <img src={selectedCert.idRecto} alt="Pièce d'identité - recto" style={styles.docThumb} />
+                      <span style={styles.docLinkLabel}>Recto</span>
+                    </a>
+                  )}
+                  {selectedCert.idVerso && (
+                    <a href={selectedCert.idVerso} target="_blank" rel="noreferrer" style={styles.docLink}>
+                      <img src={selectedCert.idVerso} alt="Pièce d'identité - verso" style={styles.docThumb} />
+                      <span style={styles.docLinkLabel}>Verso</span>
+                    </a>
+                  )}
+                  {selectedCert.photoUtilisateur && (
+                    <a href={selectedCert.photoUtilisateur} target="_blank" rel="noreferrer" style={styles.docLink}>
+                      <img src={selectedCert.photoUtilisateur} alt="Photo du titulaire" style={styles.docThumb} />
+                      <span style={styles.docLinkLabel}>Photo du titulaire</span>
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <p style={styles.detailValue}>Aucun document fourni.</p>
+              )}
+            </div>
+
+            {selectedCert.motifRejet && (
               <div style={styles.rejectReasonBox}>
                 <p style={styles.rejectReasonLabel}>Raison du rejet :</p>
-                <p style={styles.rejectReasonText}>{selectedCert.rejectReason}</p>
+                <p style={styles.rejectReasonText}>{selectedCert.motifRejet}</p>
               </div>
             )}
 
             {selectedCert.status === 'pending' && (
               <div style={styles.detailActions}>
+                {selectedCert.statutPaiement !== 'PAYE' && (
+                  <button style={styles.confirmPaiementBtn} onClick={() => handleConfirmerPaiement(selectedCert.id)}>
+                    💳 Confirmer le paiement
+                  </button>
+                )}
                 <button style={styles.rejectBtnOutline} onClick={() => { setSelectedCert(null); openRejectModal(selectedCert); }}>
                   ❌ Rejeter
                 </button>
-                <button style={styles.approveBtn} onClick={() => handleApprove(selectedCert.id)}>
+                <button
+                  style={{
+                    ...styles.approveBtn,
+                    ...(selectedCert.statutPaiement !== 'PAYE' ? styles.approveBtnDisabled : {}),
+                  }}
+                  onClick={() => handleApprove(selectedCert.id)}
+                  disabled={selectedCert.statutPaiement !== 'PAYE'}
+                  title={selectedCert.statutPaiement !== 'PAYE' ? 'Confirmez le paiement avant d\'approuver' : ''}
+                >
                   ✅ Approuver la certification
                 </button>
               </div>
@@ -709,8 +779,15 @@ const styles = {
   detailItem: { display: 'flex', flexDirection: 'column', gap: '4px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '10px' },
   detailLabel: { fontSize: '11px', color: '#adb5bd', fontWeight: '700', textTransform: 'uppercase' },
   detailValue: { fontSize: '13px', color: '#212529', fontWeight: '700' },
+  docsSection: { display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' },
+  docsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '12px' },
+  docLink: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', textDecoration: 'none' },
+  docThumb: { width: '100%', height: '110px', objectFit: 'cover', borderRadius: '10px', border: '1px solid #e9ecef', cursor: 'pointer' },
+  docLinkLabel: { fontSize: '11px', fontWeight: '700', color: '#2d6a4f', textAlign: 'center' },
   detailActions: { display: 'flex', gap: '12px' },
   approveBtn: { flex: 2, padding: '12px', backgroundColor: '#2d6a4f', color: '#ffffff', border: 'none', borderRadius: '12px', fontSize: '14px', fontWeight: '800', cursor: 'pointer' },
+  approveBtnDisabled: { backgroundColor: '#adb5bd', cursor: 'not-allowed' },
+  confirmPaiementBtn: { flex: 1, padding: '12px', backgroundColor: '#fff8e8', color: '#b8860b', border: '1px solid #f5d98a', borderRadius: '12px', fontSize: '13px', fontWeight: '800', cursor: 'pointer' },
   rejectBtnOutline: { flex: 1, padding: '12px', backgroundColor: '#fff5f2', color: '#e07a5f', border: '1px solid #f5d4c8', borderRadius: '12px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' },
   rejectReasonBox: { backgroundColor: '#fff5f2', borderRadius: '12px', padding: '14px', marginBottom: '20px', border: '1px solid #f5d4c8' },
   rejectReasonLabel: { fontSize: '12px', fontWeight: '700', color: '#e07a5f', margin: '0 0 4px 0' },

@@ -26,3 +26,12 @@ export const compterNonLus = () => httpGet(BASE, '/api/messages/non-lus');
 /** Delete an entire conversation with another user. */
 export const supprimerConversation = (autreUserId) =>
   httpDelete(BASE, `/api/messages/conversation/${autreUserId}`);
+
+/**
+ * Delete a single message (sender only). This is a real, persistent
+ * delete — the backend flags the message as deleted and never sends its
+ * content back again, rather than the frontend just hiding it locally
+ * until the next refresh brings it back.
+ */
+export const supprimerMessage = (messageId) =>
+  httpDelete(BASE, `/api/messages/${messageId}`);

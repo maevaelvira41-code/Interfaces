@@ -1051,6 +1051,7 @@ export default function App() {
           onLogout={handleLogout}
           onApproveCertification={handleApproveVerification}
           onRejectCertification={handleRejectVerification}
+          onConfirmerPaiement={handleConfirmerPaiementVerification}
         />;
       case 'order-management-admin':
         return <OrderManagementAdmin

@@ -334,11 +334,24 @@ export default function Messagerie({ onBack, vendor, currentUser }) {
     }
   };
 
-  // Local-only optimistic deletion
-  const handleDeleteLocalMessage = (id) => {
-    // Local filtering
-    setMessages(prev => prev.filter(m => m.id !== id));
-    triggerToast("Message masqué localement");
+  // Suppression réelle et persistante (pas juste locale) : appelle le
+  // backend, qui marque le message comme supprimé de façon définitive.
+  // On met aussi à jour l'état local tout de suite (estSupprime: true,
+  // pas un filtrage qui le retire de la liste) pour que le placeholder
+  // "Message supprimé" s'affiche immédiatement ET reste affiché après le
+  // prochain rafraîchissement (polling toutes les 10s) — avant ce
+  // correctif, le message réapparaissait car il n'était jamais vraiment
+  // supprimé côté serveur, juste filtré localement jusqu'au prochain fetch.
+  const handleDeleteMessage = async (id) => {
+    try {
+      await messageApi.supprimerMessage(id);
+      setMessages(prev => prev.map(m => m.id === id ? { ...m, estSupprime: true, contenu: null } : m));
+      triggerToast("Message supprimé");
+      fetchMessagesAndConversations(false);
+    } catch (err) {
+      console.error("Failed to delete message:", err);
+      triggerToast("La suppression du message a échoué.");
+    }
   };
 
   // Copy to clipboard utility
@@ -720,7 +733,9 @@ export default function Messagerie({ onBack, vendor, currentUser }) {
                 const initials = partnerNameResolved.charAt(0).toUpperCase() || '?';
                 const hasUnread = convo.unreadCount > 0;
 
-                const lastMsgText = nettoyerApercu(convo.lastMessage?.contenu || '');
+                const lastMsgText = convo.lastMessage?.estSupprime
+                  ? '🚫 Message supprimé'
+                  : nettoyerApercu(convo.lastMessage?.contenu || '');
 
                 return (
                   <div
@@ -934,9 +949,6 @@ export default function Messagerie({ onBack, vendor, currentUser }) {
                     <h3 style={{ fontSize: '14px', fontWeight: '700', color: 'white' }}>
                       {getPartnerName(conversations.find(c => c.partnerId === selectedPartnerId))}
                     </h3>
-                    <p style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.8)' }}>
-                      Identifiant ID : {selectedPartnerId}
-                    </p>
                   </div>
                 </div>
 
@@ -1100,7 +1112,10 @@ export default function Messagerie({ onBack, vendor, currentUser }) {
                             boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
                             position: 'relative'
                           }}>
-                            {/* Tap / Click Actions Vertical Menu Button */}
+                            {/* Tap / Click Actions Vertical Menu Button — masqué
+                                pour un message déjà supprimé : rien à
+                                répondre/copier/supprimer dessus. */}
+                            {!msg.estSupprime && (
                             <div style={{
                               position: 'absolute',
                               top: '4px',
@@ -1203,38 +1218,41 @@ export default function Messagerie({ onBack, vendor, currentUser }) {
                                     <Copy size={12} style={{ color: 'var(--primary-color)' }} />
                                     <span>Copier</span>
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      handleDeleteLocalMessage(msg.id);
-                                      setActiveMessageMenuId(null);
-                                    }}
-                                    style={{
-                                      padding: '8px 12px',
-                                      backgroundColor: 'transparent',
-                                      border: 'none',
-                                      color: 'var(--status-cancelled)',
-                                      fontSize: '12px',
-                                      fontWeight: '600',
-                                      cursor: 'pointer',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '8px',
-                                      textAlign: 'left',
-                                      width: '100%'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--status-cancelled-bg)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                  >
-                                    <Trash2 size={12} style={{ color: 'var(--status-cancelled)' }} />
-                                    <span>Supprimer</span>
-                                  </button>
+                                  {isMyMessage && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        handleDeleteMessage(msg.id);
+                                        setActiveMessageMenuId(null);
+                                      }}
+                                      style={{
+                                        padding: '8px 12px',
+                                        backgroundColor: 'transparent',
+                                        border: 'none',
+                                        color: 'var(--status-cancelled)',
+                                        fontSize: '12px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        textAlign: 'left',
+                                        width: '100%'
+                                      }}
+                                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--status-cancelled-bg)'}
+                                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                    >
+                                      <Trash2 size={12} style={{ color: 'var(--status-cancelled)' }} />
+                                      <span>Supprimer</span>
+                                    </button>
+                                  )}
                                 </div>
                               )}
                             </div>
+                            )}
 
                             {/* Reply Quote Banner nested in bubble */}
-                            {replyTextContext && (
+                            {!msg.estSupprime && replyTextContext && (
                               <div style={{
                                 backgroundColor: isMyMessage ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.05)',
                                 padding: '6px 10px',
@@ -1253,7 +1271,7 @@ export default function Messagerie({ onBack, vendor, currentUser }) {
                             )}
 
                             {/* Attached Image inside bubble */}
-                            {parsedImageUrl && (
+                            {!msg.estSupprime && parsedImageUrl && (
                               <div style={{ marginBottom: '6px', borderRadius: '8px', overflow: 'hidden' }}>
                                 <img
                                   src={parsedImageUrl}
@@ -1269,8 +1287,22 @@ export default function Messagerie({ onBack, vendor, currentUser }) {
                               </div>
                             )}
 
-                            {/* Content text */}
-                            {cleanContent && (
+                            {/* Message supprimé — espace réservé, comme sur WhatsApp,
+                                à la place du contenu original (déjà effacé côté
+                                backend et jamais renvoyé une fois estSupprime actif). */}
+                            {msg.estSupprime ? (
+                              <p style={{
+                                fontSize: '13px',
+                                fontStyle: 'italic',
+                                opacity: 0.7,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                lineHeight: '1.4'
+                              }}>
+                                🚫 Message supprimé
+                              </p>
+                            ) : cleanContent && (
                               <p style={{
                                 fontSize: '13px',
                                 whiteSpace: 'pre-wrap',
