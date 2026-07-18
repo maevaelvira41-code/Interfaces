@@ -175,6 +175,10 @@ export default function App() {
   const [toutesLesCommandes, setToutesLesCommandes] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null);
   const [isClientMode, setIsClientMode] = useState(false);
+  // Commande actuellement affichée dans l'écran de détail admin — avant ce
+  // correctif, cet écran ne recevait jamais la commande réelle et
+  // affichait un contenu 100% fictif (voir OrderDetailAdmin.jsx).
+  const [selectedOrder, setSelectedOrder] = useState(null);
 
   // ===== CHARGEMENT DEPUIS localStorage =====
   useEffect(() => {
@@ -1059,15 +1063,28 @@ export default function App() {
       case 'order-management-admin':
         return <OrderManagementAdmin
           ordersData={toutesLesCommandes}
-          onViewOrder={() => navigate('order-detail-admin')}
+          onViewOrder={(orderId) => {
+            const order = toutesLesCommandes.find(o => o.id === orderId);
+            setSelectedOrder(order || null);
+            navigate('order-detail-admin');
+          }}
           onBack={() => navigate('admin-dashboard')}
         />;
       case 'order-detail-admin':
         return <OrderDetailAdmin
+          order={selectedOrder}
           onBack={() => navigate('order-management-admin')}
-          onMarkAsDeliveredState={(id, newStatus) => {
-            setAdminOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o));
+          onMarkAsDelivered={async (orderId) => {
+            try {
+              await commandeApi.updateStatutCommande(orderId, 'LIVREE');
+              notifierAdmins('info', `Commande #${orderId} marquée comme livrée`, '/admin/order-management-admin');
+              await chargerToutesLesCommandes();
+              setSelectedOrder(prev => prev && prev.id === orderId ? { ...prev, status: 'Livrée' } : prev);
+            } catch (err) {
+              alert(err?.message || "La mise à jour du statut de la commande a échoué.");
+            }
           }}
+          onContactClient={(order) => goToMessage({ id: order.id_client, name: order.client })}
         />;
       case 'moderation-panel':
         return <ModerationPanel

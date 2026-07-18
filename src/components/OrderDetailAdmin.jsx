@@ -1,32 +1,85 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { paiementApi } from '../services/api';
 
-export default function OrderDetailAdmin({ onBack, onMarkAsDeliveredState }) {
-  const [status, setStatus] = useState('En préparation'); // Initial mockup state: En préparation
+// order: objet déjà mappé par commandeMapping.mapCommandePourAffichage —
+// { id, id_client, client, clientEmail, amount, status, date,
+//   items: [{ produitId, nomProduit, quantity, prixUnitaire, subtotal }] }
+// (voir App.jsx, écran 'order-detail-admin')
+
+const METHODE_LABELS = { ORANGE_MONEY: 'Orange Money', MOBILE_MONEY: 'Mobile Money', CARTE: 'Carte bancaire' };
+const STATUT_PAIEMENT_LABELS = {
+  EN_ATTENTE: { label: 'En attente', color: '#f5b041', bg: '#fffbea' },
+  REUSSI: { label: 'Réussi', color: '#2d6a4f', bg: '#e9f5ee' },
+  ECHOUE: { label: 'Échoué', color: '#c0392b', bg: '#fdecea' },
+  REMBOURSE: { label: 'Remboursé', color: '#6c757d', bg: '#f1f3f5' },
+};
+
+// Les 5 statuts "normaux" d'une commande, dans leur ordre naturel.
+// 'Annulée' est un état terminal exceptionnel, traité à part (pas une
+// étape de la progression normale).
+const STEPS = ['En attente', 'Validée', 'En préparation', 'En livraison', 'Livrée'];
+
+export default function OrderDetailAdmin({ order, onBack, onMarkAsDelivered, onContactClient }) {
+  const [paiement, setPaiement] = useState(null);
+  const [loadingPaiement, setLoadingPaiement] = useState(true);
+  const [marking, setMarking] = useState(false);
   const [notification, setNotification] = useState('');
-  const [isDelivered, setIsDelivered] = useState(false);
 
-  const steps = ['Confirmée', 'En préparation', 'Expédiée', 'Livrée'];
-  
-  const getStepIndex = (currentStatus) => {
-    return steps.indexOf(currentStatus);
+  useEffect(() => {
+    let cancelled = false;
+    if (!order?.id) { setLoadingPaiement(false); return; }
+    setLoadingPaiement(true);
+    paiementApi.getPaiementsByCommande(order.id)
+      .then((paiements) => {
+        if (cancelled) return;
+        // On garde le paiement le plus récent s'il y en a plusieurs
+        // (ex : une tentative échouée suivie d'une réussie).
+        const plusRecent = (paiements || []).slice().sort(
+          (a, b) => new Date(b.datePaiement) - new Date(a.datePaiement)
+        )[0];
+        setPaiement(plusRecent || null);
+      })
+      .catch(() => { if (!cancelled) setPaiement(null); })
+      .finally(() => { if (!cancelled) setLoadingPaiement(false); });
+    return () => { cancelled = true; };
+  }, [order?.id]);
+
+  const triggerNotification = (msg) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(''), 4000);
   };
 
-  const handleMarkAsDelivered = () => {
-    setStatus('Livrée');
-    setIsDelivered(true);
-    setNotification('🎉 La commande #2026-001 a été marquée comme LIVRÉE avec succès !');
-    if (onMarkAsDeliveredState) {
-      onMarkAsDeliveredState('001', 'Livrée');
+  const handleMarkAsDelivered = async () => {
+    if (!order || marking) return;
+    setMarking(true);
+    try {
+      await onMarkAsDelivered(order.id);
+      triggerNotification(`🎉 La commande #${order.id} a été marquée comme LIVRÉE avec succès !`);
+    } finally {
+      setMarking(false);
     }
-    setTimeout(() => setNotification(''), 4000);
   };
 
   const handleContactClient = () => {
-    setNotification('✉️ Ouverture de la messagerie de contact pour Flavier Dschang (+237 6XX XXX XXX)...');
-    setTimeout(() => setNotification(''), 4000);
+    if (!order) return;
+    onContactClient(order);
   };
 
-  const currentStepIdx = getStepIndex(status);
+  if (!order) {
+    return (
+      <div style={styles.container} className="fade-in">
+        <div style={styles.emptyState}>
+          <p style={styles.emptyText}>Commande introuvable. Elle a peut-être été retirée de la liste.</p>
+          <button onClick={onBack} style={styles.backBtn}>← Retour aux commandes</button>
+        </div>
+      </div>
+    );
+  }
+
+  const currentStepIdx = STEPS.indexOf(order.status);
+  const estAnnulee = order.status === 'Annulée';
+  const estLivree = order.status === 'Livrée';
+  const paiementStyle = paiement ? (STATUT_PAIEMENT_LABELS[paiement.statut] || { label: paiement.statut, color: '#6c757d', bg: '#f1f3f5' }) : null;
 
   return (
     <div style={styles.container} className="fade-in">
@@ -39,7 +92,7 @@ export default function OrderDetailAdmin({ onBack, onMarkAsDeliveredState }) {
 
       {/* Header */}
       <div style={styles.header}>
-        <h2 style={styles.title}>Détail commande #2026-001</h2>
+        <h2 style={styles.title}>Détail commande #{order.id}</h2>
         <button onClick={onBack} style={styles.backBtn}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ marginRight: '6px' }}>
             <line x1="19" y1="12" x2="5" y2="12" />
@@ -49,69 +102,76 @@ export default function OrderDetailAdmin({ onBack, onMarkAsDeliveredState }) {
         </button>
       </div>
 
+      {/* Cancelled banner — état terminal exceptionnel, hors de la
+          progression normale ci-dessous */}
+      {estAnnulee && (
+        <div style={styles.cancelledBanner}>❌ Cette commande a été annulée.</div>
+      )}
+
       {/* Progress Timeline Tracker */}
-      <div style={styles.trackerCard}>
-        <span style={styles.statusLabel}>Statut actuel : <strong style={{ color: status === 'Livrée' ? '#2d6a4f' : '#e07a5f' }}>{status}</strong></span>
-        <div style={styles.timelineWrapper}>
-          {steps.map((step, idx) => {
-            const isCompleted = idx <= currentStepIdx;
-            const isActive = idx === currentStepIdx;
-            return (
-              <React.Fragment key={step}>
-                {/* Connecting Line */}
-                {idx > 0 && (
-                  <div style={{
-                    ...styles.timelineLine,
-                    backgroundColor: idx <= currentStepIdx ? '#2d6a4f' : '#dee2e6'
-                  }} />
-                )}
-                
-                {/* Step Node */}
-                <div style={styles.stepNodeContainer}>
-                  <div style={{
-                    ...styles.stepDot,
-                    backgroundColor: isCompleted ? '#2d6a4f' : '#ffffff',
-                    borderColor: isCompleted ? '#2d6a4f' : '#adb5bd',
-                    boxShadow: isActive ? '0 0 0 4px rgba(45, 106, 79, 0.2)' : 'none'
-                  }}>
-                    {isCompleted ? (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="3">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    ) : (
-                      <span style={styles.stepNumber}>{idx + 1}</span>
-                    )}
+      {!estAnnulee && (
+        <div style={styles.trackerCard}>
+          <span style={styles.statusLabel}>Statut actuel : <strong style={{ color: estLivree ? '#2d6a4f' : '#e07a5f' }}>{order.status}</strong></span>
+          <div style={styles.timelineWrapper}>
+            {STEPS.map((step, idx) => {
+              const isCompleted = idx <= currentStepIdx;
+              const isActive = idx === currentStepIdx;
+              return (
+                <React.Fragment key={step}>
+                  {idx > 0 && (
+                    <div style={{
+                      ...styles.timelineLine,
+                      backgroundColor: idx <= currentStepIdx ? '#2d6a4f' : '#dee2e6'
+                    }} />
+                  )}
+                  <div style={styles.stepNodeContainer}>
+                    <div style={{
+                      ...styles.stepDot,
+                      backgroundColor: isCompleted ? '#2d6a4f' : '#ffffff',
+                      borderColor: isCompleted ? '#2d6a4f' : '#adb5bd',
+                      boxShadow: isActive ? '0 0 0 4px rgba(45, 106, 79, 0.2)' : 'none'
+                    }}>
+                      {isCompleted ? (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="3">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      ) : (
+                        <span style={styles.stepNumber}>{idx + 1}</span>
+                      )}
+                    </div>
+                    <span style={{
+                      ...styles.stepLabelText,
+                      fontWeight: isCompleted ? '700' : '500',
+                      color: isCompleted ? '#212529' : '#6c757d'
+                    }}>
+                      {step}
+                    </span>
                   </div>
-                  <span style={{
-                    ...styles.stepLabelText,
-                    fontWeight: isCompleted ? '700' : '500',
-                    color: isCompleted ? '#212529' : '#6c757d'
-                  }}>
-                    {step}
-                  </span>
-                </div>
-              </React.Fragment>
-            );
-          })}
+                </React.Fragment>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Grid Layout (Left Content, Right Summary Card) */}
       <div style={styles.layoutGrid}>
-        
+
         {/* Left Side: Order Information Card */}
         <div style={styles.leftCard}>
           {/* Section 1: Produits commandés */}
           <div style={styles.section}>
             <h3 style={styles.sectionTitle}>🛒 Produits commandés</h3>
-            <div style={styles.productRow}>
-              <div style={styles.productAvatar}>🍌</div>
-              <div style={styles.productInfo}>
-                <h4 style={styles.productName}>Banane Fraîche</h4>
-                <p style={styles.productMeta}>10 kg × 2,500 FCFA</p>
+            {(order.items || []).map((item) => (
+              <div key={item.produitId} style={styles.productRow}>
+                <div style={styles.productAvatar}>🌾</div>
+                <div style={styles.productInfo}>
+                  <h4 style={styles.productName}>{item.nomProduit}</h4>
+                  <p style={styles.productMeta}>{item.quantity} × {item.prixUnitaire.toLocaleString('fr-FR')} FCFA</p>
+                </div>
+                <div style={styles.productPrice}>{item.subtotal.toLocaleString('fr-FR')} FCFA</div>
               </div>
-              <div style={styles.productPrice}>25,000 FCFA</div>
-            </div>
+            ))}
           </div>
 
           <div style={styles.divider}></div>
@@ -120,55 +180,57 @@ export default function OrderDetailAdmin({ onBack, onMarkAsDeliveredState }) {
           <div style={styles.section}>
             <h3 style={styles.sectionTitle}>👤 Informations client</h3>
             <div style={styles.clientDetail}>
-              <p style={styles.detailName}>Flavier Dschang</p>
-              <p style={styles.detailContact}>flavier@gmail.com  |  +237 6XX XXX XXX</p>
+              <p style={styles.detailName}>{order.client}</p>
+              <p style={styles.detailContact}>{order.clientEmail || 'Email non renseigné'}</p>
+              <p style={styles.detailHint}>L'adresse de livraison exacte se discute directement avec le client via la messagerie — elle peut différer de son adresse enregistrée.</p>
             </div>
           </div>
 
           <div style={styles.divider}></div>
 
-          {/* Section 3: Adresse de livraison */}
-          <div style={styles.section}>
-            <h3 style={styles.sectionTitle}>📍 Adresse livraison</h3>
-            <p style={styles.detailText}>123 rue de la Paix, Dschang</p>
-          </div>
-
-          <div style={styles.divider}></div>
-
-          {/* Section 4: Paiement */}
+          {/* Section 3: Paiement — données réelles depuis paiement-service */}
           <div style={styles.section}>
             <h3 style={styles.sectionTitle}>💳 Paiement</h3>
-            <div style={styles.paymentBadge}>
-              <span style={styles.paymentMethod}>Mobile Money</span>
-              <span style={styles.paymentAmount}>25,000 FCFA</span>
-            </div>
+            {loadingPaiement ? (
+              <p style={styles.detailText}>Chargement...</p>
+            ) : paiement ? (
+              <div style={styles.paymentBadge}>
+                <span style={styles.paymentMethod}>{METHODE_LABELS[paiement.methode] || paiement.methode}</span>
+                <span style={{ ...styles.paymentStatus, color: paiementStyle.color, backgroundColor: paiementStyle.bg }}>
+                  {paiementStyle.label}
+                </span>
+                <span style={styles.paymentAmount}>{paiement.montant.toLocaleString('fr-FR')} FCFA</span>
+              </div>
+            ) : (
+              <p style={styles.detailText}>Aucun paiement enregistré pour cette commande.</p>
+            )}
           </div>
 
           <div style={styles.divider}></div>
 
-          {/* Section 5: Date commande */}
+          {/* Section 4: Date commande */}
           <div style={styles.section}>
             <h3 style={styles.sectionTitle}>📅 Date commande</h3>
-            <p style={styles.detailText}>15 mai 2026 - 14:30</p>
+            <p style={styles.detailText}>{order.date || 'Non renseignée'}</p>
           </div>
 
           {/* Action Buttons */}
           <div style={styles.buttonGroup}>
-            <button 
-              onClick={handleMarkAsDelivered} 
+            <button
+              onClick={handleMarkAsDelivered}
               style={{
                 ...styles.btnPrimary,
-                ...(status === 'Livrée' ? styles.btnDisabled : {})
+                ...((estLivree || estAnnulee || marking) ? styles.btnDisabled : {})
               }}
-              disabled={status === 'Livrée'}
+              disabled={estLivree || estAnnulee || marking}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
                 <polyline points="22 4 12 14.01 9 11.01" />
               </svg>
-              {status === 'Livrée' ? 'Livraison validée' : 'Marquer livrée'}
+              {estLivree ? 'Livraison validée' : marking ? 'Mise à jour...' : 'Marquer livrée'}
             </button>
-            
+
             <button onClick={handleContactClient} style={styles.btnSecondary}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
@@ -182,30 +244,10 @@ export default function OrderDetailAdmin({ onBack, onMarkAsDeliveredState }) {
         {/* Right Side: Résumé Card */}
         <div style={styles.rightCard}>
           <h3 style={styles.summaryTitle}>Résumé</h3>
-          
-          <div style={styles.summaryRow}>
-            <span style={styles.summaryLabel}>Sous-total</span>
-            <span style={styles.summaryValue}>25,000 FCFA</span>
-          </div>
-
-          <div style={styles.summaryDivider}></div>
 
           <div style={{ ...styles.summaryRow, marginBottom: '24px' }}>
             <span style={styles.totalLabel}>Total</span>
-            <span style={styles.totalValue}>25,000 FCFA</span>
-          </div>
-
-          {/* Logistics metadata */}
-          <div style={styles.logisticsBlock}>
-            <div style={styles.logisticsItem}>
-              <span style={styles.logisticsLabel}>Numéro suivi</span>
-              <span style={styles.trackingLink}>AGM-2026-001-Z345</span>
-            </div>
-
-            <div style={styles.logisticsItem}>
-              <span style={styles.logisticsLabel}>Transporteur</span>
-              <span style={styles.carrierVal}>DHL Express</span>
-            </div>
+            <span style={styles.totalValue}>{order.amount.toLocaleString('fr-FR')} FCFA</span>
           </div>
         </div>
 
@@ -235,6 +277,29 @@ const styles = {
     fontWeight: '700',
     animation: 'slideInRight 0.3s ease-out forwards',
   },
+  emptyState: {
+    textAlign: 'center',
+    padding: '60px 20px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '20px',
+  },
+  emptyText: {
+    fontSize: '14px',
+    color: '#6c757d',
+    fontWeight: '500',
+  },
+  cancelledBanner: {
+    backgroundColor: '#fdecea',
+    color: '#c0392b',
+    fontWeight: '700',
+    fontSize: '14px',
+    padding: '16px 20px',
+    borderRadius: '12px',
+    border: '1px solid #f5c6c0',
+    marginBottom: '24px',
+  },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -262,10 +327,6 @@ const styles = {
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     outline: 'none',
-    ':hover': {
-      backgroundColor: '#f8f9fa',
-      borderColor: '#1b4d3e',
-    }
   },
   // Tracker
   trackerCard: {
@@ -289,12 +350,6 @@ const styles = {
     justifyContent: 'space-between',
     position: 'relative',
     padding: '0 20px',
-    '@media (max-width: 576px)': {
-      flexDirection: 'column',
-      alignItems: 'flex-start',
-      gap: '20px',
-      padding: '0',
-    }
   },
   timelineLine: {
     flexGrow: 1,
@@ -303,9 +358,6 @@ const styles = {
     transform: 'translateY(-10px)',
     borderRadius: '2px',
     transition: 'background-color 0.4s ease',
-    '@media (max-width: 576px)': {
-      display: 'none',
-    }
   },
   stepNodeContainer: {
     display: 'flex',
@@ -314,11 +366,6 @@ const styles = {
     gap: '8px',
     zIndex: 2,
     position: 'relative',
-    '@media (max-width: 576px)': {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: '12px',
-    }
   },
   stepDot: {
     width: '32px',
@@ -346,9 +393,6 @@ const styles = {
     gridTemplateColumns: '1.4fr 1fr',
     gap: '30px',
     alignItems: 'start',
-    '@media (max-width: 768px)': {
-      gridTemplateColumns: '1fr',
-    }
   },
   leftCard: {
     backgroundColor: '#ffffff',
@@ -379,6 +423,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '16px',
+    marginTop: '8px',
   },
   productAvatar: {
     width: '44px',
@@ -390,6 +435,7 @@ const styles = {
     justifyContent: 'center',
     fontSize: '22px',
     border: '1px solid #f8e5d0',
+    flexShrink: 0,
   },
   productInfo: {
     flexGrow: 1,
@@ -408,11 +454,11 @@ const styles = {
     fontWeight: '800',
     color: '#e07a5f',
   },
-  // Client & Addresses
+  // Client
   clientDetail: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '2px',
+    gap: '4px',
   },
   detailName: {
     fontSize: '15px',
@@ -423,6 +469,12 @@ const styles = {
     fontSize: '13px',
     color: '#6c757d',
   },
+  detailHint: {
+    fontSize: '12px',
+    color: '#adb5bd',
+    fontStyle: 'italic',
+    marginTop: '4px',
+  },
   detailText: {
     fontSize: '14px',
     color: '#343a40',
@@ -431,13 +483,20 @@ const styles = {
   paymentBadge: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
+    gap: '10px',
+    flexWrap: 'wrap',
   },
   paymentMethod: {
     fontSize: '13px',
     fontWeight: '700',
     color: '#2d6a4f',
     backgroundColor: '#d8f3dc',
+    padding: '4px 10px',
+    borderRadius: '6px',
+  },
+  paymentStatus: {
+    fontSize: '12px',
+    fontWeight: '700',
     padding: '4px 10px',
     borderRadius: '6px',
   },
@@ -469,6 +528,7 @@ const styles = {
     boxShadow: '0 4px 10px rgba(27,77,62,0.15)',
     transition: 'all 0.2s ease',
     cursor: 'pointer',
+    border: 'none',
   },
   btnDisabled: {
     backgroundColor: '#adb5bd',
@@ -511,21 +571,7 @@ const styles = {
   summaryRow: {
     display: 'flex',
     justifyContent: 'space-between',
-    marginBottom: '14px',
     fontSize: '13.5px',
-  },
-  summaryLabel: {
-    color: '#6c757d',
-    fontWeight: '500',
-  },
-  summaryValue: {
-    color: '#212529',
-    fontWeight: '700',
-  },
-  summaryDivider: {
-    height: '1px',
-    backgroundColor: '#e9ecef',
-    margin: '16px 0',
   },
   totalLabel: {
     fontSize: '15px',
@@ -537,36 +583,4 @@ const styles = {
     fontWeight: '800',
     color: '#e07a5f',
   },
-  logisticsBlock: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: '10px',
-    padding: '16px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-    border: '1px solid #e9ecef',
-  },
-  logisticsItem: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2px',
-  },
-  logisticsLabel: {
-    fontSize: '11px',
-    fontWeight: '700',
-    color: '#868e96',
-    textTransform: 'uppercase',
-  },
-  trackingLink: {
-    fontSize: '13px',
-    fontWeight: '700',
-    color: '#1b4d3e',
-    textDecoration: 'underline',
-    cursor: 'pointer',
-  },
-  carrierVal: {
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#343a40',
-  }
 };
