@@ -32,7 +32,7 @@ import MyProducts from './components/MyProducts';
 import NotificationsCenter from './components/NotificationsCenter';
 import OrderDetailAdmin from './components/OrderDetailAdmin';
 import ChangePassword from './components/ChangePassword';
-import { authApi, utilisateurApi, produitApi, signalementApi, commandeApi, paiementApi, certificationApi, notificationApi, getSession } from './services/api';
+import { authApi, utilisateurApi, produitApi, signalementApi, commandeApi, paiementApi, certificationApi, notificationApi, messageApi, getSession } from './services/api';
 import { ROLE_FRONTEND_TO_BACKEND, joinNomComplet, splitNomComplet, mapProfileToFrontendUser } from './services/userMapping';
 import { mapCertificationPourAdmin } from './services/certificationMapping';
 import { mapProduitPourVendeur, construireProduitRequest } from './services/productMapping';
@@ -44,6 +44,10 @@ export default function App() {
   const [screen, setScreen] = useState('home');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [selectedVendor, setSelectedVendor] = useState(null);
+  // Retient l'écran d'où l'on vient avant d'ouvrir la messagerie, pour que
+  // le bouton retour ramène au bon endroit (produit, profil producteur,
+  // ou l'écran courant si ouverte depuis la barre de navigation).
+  const [previousScreen, setPreviousScreen] = useState('home');
 
   // ===== LANGUE =====
   const [lang, setLang] = useState('fr');
@@ -133,6 +137,18 @@ export default function App() {
       setNotifications((dtos || []).map(mapNotificationPourAffichage));
     } catch (err) {
       console.error('Impossible de charger vos notifications :', err);
+    }
+  };
+
+  // ===== MESSAGES NON LUS (pour le badge de l'icône messagerie) =====
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
+  const chargerNombreMessagesNonLus = async () => {
+    if (!currentUser?.id) { setUnreadMessagesCount(0); return; }
+    try {
+      const count = await messageApi.compterNonLus();
+      setUnreadMessagesCount(count || 0);
+    } catch (err) {
+      console.error('Impossible de charger le nombre de messages non lus :', err);
     }
   };
 
@@ -389,6 +405,20 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    chargerNombreMessagesNonLus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]);
+
+  // Rafraîchit le badge dès qu'on quitte la messagerie (les messages lus
+  // pendant la visite doivent disparaître du compteur non-lus).
+  useEffect(() => {
+    if (screen !== 'message') {
+      chargerNombreMessagesNonLus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen]);
 
   // ===== GARDE AUTH =====
   const requireLogin = (action) => {
@@ -707,7 +737,19 @@ export default function App() {
 
   // ===== NAVIGATION =====
   const goToProduct = (product) => { setSelectedProduct(product); setScreen('product-detail'); };
-  const goToMessage = (vendor) => requireLogin(() => { setSelectedVendor(vendor); setScreen('message'); });
+  const goToMessage = (vendor) => requireLogin(() => {
+    setPreviousScreen(screen);
+    setSelectedVendor(vendor);
+    setScreen('message');
+  });
+  // Ouvre la messagerie en mode "boîte de réception générale" (pas de
+  // conversation précise pré-sélectionnée) — utilisé par l'icône de la
+  // barre de navigation et le menu déroulant du profil.
+  const goToMessagerie = () => requireLogin(() => {
+    setPreviousScreen(screen);
+    setSelectedVendor(null);
+    setScreen('message');
+  });
   const goToProducerProfile = (vendor) => { setSelectedVendor(vendor); setScreen('producer-profile'); };
 
   const clientOnlyScreens = ['cart', 'checkout-wizard', 'orders', 'purchases'];
@@ -861,7 +903,7 @@ export default function App() {
           onBackHome={() => navigate('home')}
         />;
       case 'message':
-        return <MessagePage vendor={selectedVendor} currentUser={currentUser} onBack={() => navigate('product-detail')} />;
+        return <MessagePage vendor={selectedVendor} currentUser={currentUser} onBack={() => navigate(previousScreen)} />;
       case 'user-profile':
         return <UserProfile
           currentUser={currentUser}
@@ -1100,6 +1142,8 @@ export default function App() {
         notifications={notifications}
         isClientMode={isClientMode}
         onToggleClientMode={toggleClientMode}
+        unreadMessagesCount={unreadMessagesCount}
+        onOpenMessages={goToMessagerie}
       />
       <div style={styles.screenContainer}>{renderScreen()}</div>
       {showSignalement && (

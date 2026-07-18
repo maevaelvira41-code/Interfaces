@@ -1,6 +1,6 @@
 // src/components/NavigationConsole.jsx
 import React, { useState, useRef, useEffect } from 'react';
-import { ShoppingCart, User, LogOut, ChevronDown, ShieldCheck, Home, Package, LayoutGrid, Bell, Users, ShoppingBag, Menu, X } from 'lucide-react';
+import { ShoppingCart, User, LogOut, ChevronDown, ShieldCheck, Home, Package, LayoutGrid, Bell, Users, ShoppingBag, Menu, X, MessageSquare } from 'lucide-react';
 
 export default function NavigationConsole({
   currentScreen,
@@ -13,6 +13,8 @@ export default function NavigationConsole({
   notifications = [],
   isClientMode = false,
   onToggleClientMode,
+  unreadMessagesCount = 0,
+  onOpenMessages,
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -108,6 +110,10 @@ export default function NavigationConsole({
                     <Bell size={20} />
                     {unreadNotifications > 0 && <span style={styles.notifBadge}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>}
                   </button>
+                  <button style={styles.notifBtn} onClick={() => { onOpenMessages && onOpenMessages(); setMobileMenuOpen(false); }}>
+                    <MessageSquare size={20} />
+                    {unreadMessagesCount > 0 && <span style={styles.notifBadge}>{unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}</span>}
+                  </button>
                 </>
               )}
             </div>
@@ -140,6 +146,12 @@ export default function NavigationConsole({
                   <span style={styles.notifBadge}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</span>
                 )}
               </button>
+              <button style={styles.notifBtn} onClick={() => onOpenMessages && onOpenMessages()} title="Messagerie">
+                <MessageSquare size={20} />
+                {unreadMessagesCount > 0 && (
+                  <span style={styles.notifBadge}>{unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}</span>
+                )}
+              </button>
 
               <div style={styles.userMenuWrap} ref={menuRef}>
                 <button style={styles.userPill} onClick={() => setShowMenu(!showMenu)}>
@@ -169,6 +181,10 @@ export default function NavigationConsole({
                     <button style={styles.dropdownItem} onClick={() => { setShowMenu(false); onNavigate('notifications'); }}>
                       <Bell size={15} /> Notifications
                       {unreadNotifications > 0 && <span style={styles.dropdownBadge}>{unreadNotifications}</span>}
+                    </button>
+                    <button style={styles.dropdownItem} onClick={() => { setShowMenu(false); onOpenMessages && onOpenMessages(); }}>
+                      <MessageSquare size={15} /> Messages
+                      {unreadMessagesCount > 0 && <span style={styles.dropdownBadge}>{unreadMessagesCount}</span>}
                     </button>
                     {currentUser.role === 'client' && (
                       <>
