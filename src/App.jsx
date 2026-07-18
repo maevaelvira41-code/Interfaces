@@ -550,7 +550,13 @@ export default function App() {
     const authResponse = await authApi.login(email, password);
     const expectedBackendRole = ROLE_FRONTEND_TO_BACKEND[uiRole];
 
-    if (!authResponse.roles?.includes(expectedBackendRole)) {
+    // Le formulaire de connexion ne propose que "Client" et "Vendeur" —
+    // il n'y a volontairement aucune option "Admin" visible dans
+    // l'interface. Un compte ADMIN doit donc pouvoir se connecter quel
+    // que soit le bouton sélectionné (l'utilisateur n'a pas d'autre choix
+    // de toute façon), tant que ses identifiants sont corrects.
+    const estAdmin = authResponse.roles?.includes('ADMIN');
+    if (!estAdmin && !authResponse.roles?.includes(expectedBackendRole)) {
       authApi.logout();
       throw new Error(`Aucun compte ${uiRole} trouvé avec ces identifiants.`);
     }
