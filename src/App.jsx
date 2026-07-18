@@ -1052,6 +1052,9 @@ export default function App() {
           onApproveCertification={handleApproveVerification}
           onRejectCertification={handleRejectVerification}
           onConfirmerPaiement={handleConfirmerPaiementVerification}
+          onToggleUserBlocked={handleToggleUserBlocked}
+          onNavigateToVendorVerification={() => navigate('vendor-verification')}
+          onNavigateToModeration={() => navigate('moderation-panel')}
         />;
       case 'order-management-admin':
         return <OrderManagementAdmin
