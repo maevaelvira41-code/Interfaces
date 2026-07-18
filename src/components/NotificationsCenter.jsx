@@ -55,12 +55,6 @@ export default function NotificationsCenter({
 
   const getIcon = (type) => typeIconMap[type] || <Info size={20} color="#2d6a4f" />;
 
-  // Débogage
-  console.log('Notifications reçues :', notifications);
-  console.log('CurrentUser :', currentUser);
-  console.log('UserNotifs :', userNotifs);
-  console.log('Filtered :', filtered);
-
   return (
     <div style={styles.container}>
       <div style={styles.header}>

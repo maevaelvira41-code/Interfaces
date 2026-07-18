@@ -96,10 +96,6 @@ export default function AdminDashboard({
     // On appelle le callback passé par App
     const rejectFn = (id) => {
       // Simulé : dans App, on gère via handleRejectVerification
-      if (onApproveCertification) {
-        // On peut utiliser une fonction dédiée si elle existe, sinon on notifie
-        console.log('Rejeter la certification', id, 'avec raison:', rejectReason);
-      }
     };
     rejectFn(id);
     setShowRejectModal(false);

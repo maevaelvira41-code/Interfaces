@@ -164,10 +164,6 @@ export default function App() {
   useEffect(() => {
     const savedCart = localStorage.getItem('cartItems');
     if (savedCart) { try { setCartItems(JSON.parse(savedCart)); } catch {} }
-    const savedVerifications = localStorage.getItem('vendorVerifications');
-    if (savedVerifications) { try { setVendorVerifications(JSON.parse(savedVerifications)); } catch {} }
-    const savedSignalements = localStorage.getItem('signalements');
-    if (savedSignalements) { try { setSignalements(JSON.parse(savedSignalements)); } catch {} }
     const savedPlan = localStorage.getItem('activePlan');
     if (savedPlan) { setActivePlan(savedPlan); }
     const savedClientMode = localStorage.getItem('isClientMode');
@@ -193,8 +189,6 @@ export default function App() {
 
   // ===== SAUVEGARDE =====
   useEffect(() => { localStorage.setItem('cartItems', JSON.stringify(cartItems)); }, [cartItems]);
-  useEffect(() => { localStorage.setItem('vendorVerifications', JSON.stringify(vendorVerifications)); }, [vendorVerifications]);
-  useEffect(() => { localStorage.setItem('signalements', JSON.stringify(signalements)); }, [signalements]);
   useEffect(() => { localStorage.setItem('activePlan', activePlan); }, [activePlan]);
   useEffect(() => { localStorage.setItem('isClientMode', JSON.stringify(isClientMode)); }, [isClientMode]);
 
