@@ -67,4 +67,4 @@ Le backend (microservices Spring Boot) se trouve dans le dépôt : [projetfinann
 
 ## Équipe
 
-Projet réalisé dans le cadre du travail de fin d'études AgriCam, par une équipe de contributeurs francophones.
+Projet réalisé dans le cadre du travail de fin d'études Licence informatique UDs 2026
