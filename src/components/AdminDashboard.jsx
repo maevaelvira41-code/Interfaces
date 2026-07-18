@@ -84,6 +84,16 @@ export default function AdminDashboard({
     setTimeout(() => setToast(''), 3000);
   };
 
+  // certificationMapping.js (mapCertificationPourAdmin) renvoie prenom/nom,
+  // pas farm/vendeurNom/vendeur (qui n'existaient pas sur l'objet réel et
+  // laissaient l'affichage vide). Petit helper pour construire le nom
+  // complet du producteur de façon sûre.
+  const nomCompletProducteur = (cert) => {
+    if (!cert) return '';
+    const nom = `${cert.prenom || ''} ${cert.nom || ''}`.trim();
+    return nom || `Producteur #${cert.producteurId ?? ''}`;
+  };
+
   // ===== ACTIONS CERTIFICATIONS =====
   const handleApprove = async (id) => {
     // On appelle le vrai handler passé par App (certificationApi.reviserCertification)
@@ -143,7 +153,7 @@ export default function AdminDashboard({
         <div style={styles.overlay}>
           <div style={styles.rejectModal}>
             <h3 style={styles.rejectTitle}>❌ Rejeter la certification</h3>
-            <p style={styles.rejectSubtitle}>Ferme : <strong>{certToReject.farm || certToReject.vendeurNom || certToReject.vendeur}</strong></p>
+            <p style={styles.rejectSubtitle}>Producteur : <strong>{nomCompletProducteur(certToReject)}</strong></p>
             <div style={styles.field}>
               <label style={styles.label}>Raison du rejet *</label>
               <textarea
@@ -168,10 +178,10 @@ export default function AdminDashboard({
           <div style={styles.detailModal} onClick={e => e.stopPropagation()}>
             <div style={styles.detailHeader}>
               <div style={styles.detailHeaderLeft}>
-                <div style={styles.detailAvatar}>{selectedCert.farm ? selectedCert.farm[0] : '?'}</div>
+                <div style={styles.detailAvatar}>{selectedCert.prenom ? selectedCert.prenom[0] : '?'}</div>
                 <div>
-                  <h3 style={styles.detailTitle}>{selectedCert.farm || selectedCert.vendeurNom || selectedCert.vendeur}</h3>
-                  <p style={styles.detailSub}>{selectedCert.vendeur || selectedCert.vendeurNom} · {selectedCert.email}</p>
+                  <h3 style={styles.detailTitle}>{nomCompletProducteur(selectedCert)}</h3>
+                  <p style={styles.detailSub}>{selectedCert.email}</p>
                 </div>
               </div>
               <button style={styles.closeBtn} onClick={() => setSelectedCert(null)}>✕</button>
@@ -506,10 +516,10 @@ export default function AdminDashboard({
                     return (
                       <div key={cert.id} style={styles.certCard}>
                         <div style={styles.certLeft}>
-                          <div style={styles.certAvatar}>{cert.farm ? cert.farm[0] : '?'}</div>
+                          <div style={styles.certAvatar}>{cert.prenom ? cert.prenom[0] : '?'}</div>
                           <div style={styles.certInfo}>
-                            <h4 style={styles.certFarm}>{cert.farm || cert.vendeurNom || cert.vendeur}</h4>
-                            <p style={styles.certVendeur}>👤 {cert.vendeur || cert.vendeurNom} · {cert.email}</p>
+                            <h4 style={styles.certFarm}>{nomCompletProducteur(cert)}</h4>
+                            <p style={styles.certVendeur}>👤 {cert.email}</p>
                             <p style={styles.certMeta}>📍 {cert.location || 'Non spécifiée'}</p>
                             <div style={styles.certDocs}>
                               <span style={styles.certDocBadge}>📄 {cert.documents ? cert.documents.length : 0} documents</span>
