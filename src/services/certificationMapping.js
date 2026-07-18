@@ -37,11 +37,16 @@ export function mapCertificationPourAdmin(dto, producteurInfo = {}) {
     nom: producteurInfo.nom || `#${dto.producteurId}`,
     email: producteurInfo.email || '—',
     telephone: producteurInfo.telephone || '—',
+    location: producteurInfo.adresse || null,
     typeDocument: dto.typeDocument,
     typeDocumentLabel: TYPE_DOCUMENT_LABELS[dto.typeDocument] || dto.typeDocument,
     idRecto: dto.idRecto,
     idVerso: dto.idVerso,
     photoUtilisateur: dto.photoUtilisateur,
+    // Liste des documents réellement fournis (certains producteurs n'ont
+    // pas forcément les 3 : ex. pas de photoUtilisateur), utilisée pour
+    // le badge "X documents" côté AdminDashboard.
+    documents: [dto.idRecto, dto.idVerso, dto.photoUtilisateur].filter(Boolean),
     dureeMois: dto.dureeMois,
     montant: dto.montant,
     moyenPaiement: dto.moyenPaiement,

@@ -294,7 +294,7 @@ export default function App() {
           try {
             const producteur = await utilisateurApi.getUtilisateurById(dto.producteurId);
             const { prenom, nom } = splitNomComplet(producteur?.nom);
-            producteurInfo = { prenom, nom, email: producteur?.email, telephone: producteur?.telephone };
+            producteurInfo = { prenom, nom, email: producteur?.email, telephone: producteur?.telephone, adresse: producteur?.adresse };
           } catch {
             // producteur introuvable : mapCertificationPourAdmin retombe sur des valeurs par défaut
           }
